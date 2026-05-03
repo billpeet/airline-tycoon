@@ -6,7 +6,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -108,9 +107,9 @@ export function AppTopbar({
             <ChevronDown className="size-3.5 text-ink-faint transition-transform group-data-[state=open]:rotate-180" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuLabel className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink-faint">
+            <div className="px-2 py-1.5 font-mono text-[10px] uppercase tracking-[0.2em] text-ink-faint truncate">
               {user.email}
-            </DropdownMenuLabel>
+            </div>
             <DropdownMenuSeparator />
             <DropdownMenuItem disabled>
               <UserRound className="size-4" /> Captain’s log
