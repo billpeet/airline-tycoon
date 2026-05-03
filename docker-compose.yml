@@ -1,0 +1,52 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: airline-tycoon:latest
+    container_name: airline-tycoon
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: /data/airline-tycoon.sqlite
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET is required}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?GOOGLE_CLIENT_ID is required}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:?GOOGLE_CLIENT_SECRET is required}
+    volumes:
+      - airline-tycoon-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Nightly backup. Copies the live SQLite via VACUUM INTO so the snapshot is consistent.
+  backup:
+    image: alpine:3.20
+    container_name: airline-tycoon-backup
+    restart: unless-stopped
+    depends_on:
+      - app
+    volumes:
+      - airline-tycoon-data:/data:ro
+      - airline-tycoon-backups:/backups
+    entrypoint:
+      - sh
+      - -c
+      - |
+        apk add --no-cache sqlite >/dev/null
+        while true; do
+          ts=$$(date -u +%Y%m%dT%H%M%SZ)
+          sqlite3 /data/airline-tycoon.sqlite "VACUUM INTO '/backups/airline-tycoon-$${ts}.sqlite'"
+          # Keep the 14 most recent backups.
+          ls -1t /backups/airline-tycoon-*.sqlite | tail -n +15 | xargs -r rm -f
+          sleep 86400
+        done
+
+volumes:
+  airline-tycoon-data:
+  airline-tycoon-backups:
