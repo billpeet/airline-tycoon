@@ -60,6 +60,17 @@ export default async function RoutesPage() {
     .innerJoin(aircraftType, eq(aircraft.typeId, aircraftType.id))
     .where(and(eq(aircraft.gameId, g.id), eq(aircraft.status, "in_service")));
 
+  // Build per-aircraft used-hours so the wizard can preview headroom.
+  const usedHoursByAircraft: Record<string, number> = {};
+  for (const r of routes) {
+    if (r.status !== "active") continue;
+    const ac = fleet.find((f) => f.tail === r.tail);
+    if (!ac) continue;
+    const KTS_TO_KMH = 1.852;
+    const h = (r.distanceKm / (ac.cruiseSpeedKts * KTS_TO_KMH)) * 2 * (r.freq / 7);
+    usedHoursByAircraft[ac.id] = (usedHoursByAircraft[ac.id] ?? 0) + h;
+  }
+
   const baseIds = Array.from(new Set(fleet.map((f) => f.baseId)));
   const bases = baseIds.length
     ? await db.select().from(airport).where(inArray(airport.id, baseIds))
@@ -80,6 +91,7 @@ export default async function RoutesPage() {
             fleet={fleet}
             bases={bases}
             reputation={g.reputation}
+            usedHoursByAircraft={usedHoursByAircraft}
           />
         }
       />
@@ -99,6 +111,7 @@ export default async function RoutesPage() {
                 <Th>Distance</Th>
                 <Th>Fare</Th>
                 <Th>Freq/wk</Th>
+                <Th>Daily hrs</Th>
                 <Th>Daily pax</Th>
                 <Th>Load</Th>
                 <Th>Daily net</Th>
@@ -108,6 +121,10 @@ export default async function RoutesPage() {
             <tbody>
               {active.map((r) => {
                 const net = r.revenue - r.cost;
+                const ac = fleet.find((f) => f.tail === r.tail);
+                const dailyHrs = ac
+                  ? (r.distanceKm / (ac.cruiseSpeedKts * 1.852)) * 2 * (r.freq / 7)
+                  : 0;
                 return (
                   <tr key={r.id} className="border-b border-ink/10 last:border-b-0">
                     <Td>
@@ -122,6 +139,7 @@ export default async function RoutesPage() {
                     <Td className="num-tabular">{Math.round(r.distanceKm).toLocaleString()} km</Td>
                     <Td className="num-tabular">${(r.fareCents / 100).toFixed(0)}</Td>
                     <Td className="num-tabular">{r.freq}</Td>
+                    <Td className="num-tabular">{dailyHrs.toFixed(1)}h</Td>
                     <Td className="num-tabular">{r.pax.toLocaleString()}</Td>
                     <Td className="num-tabular">{(r.load * 100).toFixed(0)}%</Td>
                     <Td className={`num-tabular ${net >= 0 ? "text-hangar" : "text-beacon"}`}>

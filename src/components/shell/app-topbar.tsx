@@ -31,6 +31,7 @@ export function AppTopbar({
   kpis,
   rateMultiplier = 1,
   rateClass = "connected",
+  nextTickAtMs,
 }: {
   user: SessionUser;
   airlineName?: string;
@@ -40,6 +41,7 @@ export function AppTopbar({
   kpis: Kpi[];
   rateMultiplier?: number;
   rateClass?: "connected" | "offline";
+  nextTickAtMs?: number;
 }) {
   const router = useRouter();
   const initials = (user.name ?? user.email ?? "?")
@@ -146,6 +148,8 @@ export function AppTopbar({
         <Divider />
         <KeyVal k="REAL" v={wallclock || "—"} />
         <Divider />
+        <NextTick atMs={nextTickAtMs} />
+        <Divider />
         <RateSelector current={rateMultiplier} />
       </div>
     </header>
@@ -161,6 +165,29 @@ function KeyVal({ k, v }: { k: string; v: string }) {
     <div className="flex items-center gap-2">
       <span className="label-code text-ink-faint">{k}</span>
       <span className="num-tabular text-[12px] text-ink">{v}</span>
+    </div>
+  );
+}
+
+function NextTick({ atMs }: { atMs?: number }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  if (!atMs) return null;
+  const remaining = Math.max(0, atMs - now);
+  const totalSec = Math.floor(remaining / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  const formatted = h > 0
+    ? `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`
+    : `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+  return (
+    <div className="flex items-center gap-2">
+      <span className="label-code text-ink-faint">NEXT TICK</span>
+      <span className="num-tabular text-[12px] text-ink">{formatted}</span>
     </div>
   );
 }

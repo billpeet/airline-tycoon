@@ -34,10 +34,12 @@ export function OpenRouteButton({
   fleet,
   bases,
   reputation,
+  usedHoursByAircraft,
 }: {
   fleet: FleetItem[];
   bases: AirportLite[];
   reputation: number;
+  usedHoursByAircraft: Record<string, number>;
 }) {
   const [open, setOpen] = useState(false);
   const disabled = fleet.length === 0;
@@ -64,22 +66,27 @@ export function OpenRouteButton({
           fleet={fleet}
           bases={bases}
           reputation={reputation}
+          usedHoursByAircraft={usedHoursByAircraft}
         />
       )}
     </>
   );
 }
 
+const MAX_DAILY_FLIGHT_HOURS = 14;
+
 function OpenRouteDialog({
   onClose,
   fleet,
   bases,
   reputation,
+  usedHoursByAircraft,
 }: {
   onClose: () => void;
   fleet: FleetItem[];
   bases: AirportLite[];
   reputation: number;
+  usedHoursByAircraft: Record<string, number>;
 }) {
   const [aircraftId, setAircraftId] = useState<string>(fleet[0]?.id ?? "");
   const [fromId, setFromId] = useState<string>(fleet[0]?.baseId ?? "");
@@ -117,6 +124,10 @@ function OpenRouteDialog({
     const flightHoursPerLeg = distance / (aircraft.cruiseSpeedKts * 1.852);
     const dailyFreq = frequency / 7;
     const seatsPerDay = aircraft.pax * dailyFreq;
+    const newDailyHours = flightHoursPerLeg * 2 * dailyFreq;
+    const usedHours = usedHoursByAircraft[aircraft.id] ?? 0;
+    const totalAfter = usedHours + newDailyHours;
+    const utilOk = totalAfter <= MAX_DAILY_FLIGHT_HOURS;
     // Reuse the same demand formula as the sim, in pure JS for preview.
     const sizeWeight = (s: "small" | "medium" | "large") =>
       s === "small" ? 0.25 : s === "medium" ? 0.7 : 1.4;
@@ -142,10 +153,21 @@ function OpenRouteDialog({
       realised,
       load,
       marketCents: market,
+      newDailyHours,
+      usedHours,
+      totalAfter,
+      utilOk,
     };
-  }, [aircraft, fromAirport, toAirport, distance, fareEconomy, frequency, reputation]);
+  }, [aircraft, fromAirport, toAirport, distance, fareEconomy, frequency, reputation, usedHoursByAircraft]);
 
-  const canSubmit = !!aircraft && !!fromAirport && !!toAirport && !!projection?.inRange && fareEconomy >= 10 && frequency >= 1;
+  const canSubmit =
+    !!aircraft &&
+    !!fromAirport &&
+    !!toAirport &&
+    !!projection?.inRange &&
+    !!projection?.utilOk &&
+    fareEconomy >= 10 &&
+    frequency >= 1;
 
   return (
     <div
@@ -273,7 +295,21 @@ function OpenRouteDialog({
               <Stat k="Expected pax" v={projection.realised.toLocaleString()} />
               <Stat k="Load factor" v={`${(projection.load * 100).toFixed(0)}%`} />
               <Stat k="Range" v={projection.inRange ? "✓ within" : "✗ exceeds"} tone={projection.inRange ? "positive" : "negative"} />
+              <Stat
+                k="Aircraft utilisation"
+                v={`${projection.totalAfter.toFixed(1)}h / ${MAX_DAILY_FLIGHT_HOURS}h`}
+                tone={projection.utilOk ? "positive" : "negative"}
+              />
+              <Stat
+                k="This route adds"
+                v={`${projection.newDailyHours.toFixed(1)}h / day`}
+              />
             </div>
+          )}
+          {projection && !projection.utilOk && (
+            <p className="border border-runway bg-runway/15 px-3 py-2 text-[12px] text-ink">
+              Aircraft is over its 14h/day cap. Lower frequency, shorten the route, or assign another tail.
+            </p>
           )}
 
           {error && (

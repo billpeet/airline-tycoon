@@ -86,6 +86,20 @@ export function gameDayToDate(day: number): Date {
   return new Date(GAME_EPOCH.getTime() + day * 24 * 60 * 60 * 1000);
 }
 
+/**
+ * Real-ms required to advance one whole game-day at the given rate.
+ * Baseline is 1 real hour per game-day; doubled rate = half the real time.
+ */
+export function realMsPerGameDay(rate: number): number {
+  return (REAL_SECONDS_PER_GAME_DAY * 1000) / Math.max(0.0001, rate);
+}
+
+/** Wallclock at which the next whole game-day will tick over. */
+export function nextTickAt(lastSimulatedAt: Date | number, rate: number): number {
+  const last = typeof lastSimulatedAt === "number" ? lastSimulatedAt : lastSimulatedAt.getTime();
+  return last + realMsPerGameDay(rate);
+}
+
 export function formatGameDate(day: number): { weekday: string; date: string; year: string } {
   const d = gameDayToDate(day);
   const weekday = d.toLocaleDateString("en-GB", { weekday: "short", timeZone: "UTC" }).toUpperCase();

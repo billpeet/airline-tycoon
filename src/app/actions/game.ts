@@ -16,7 +16,7 @@ import {
 import { getSessionUser } from "@/lib/session";
 import { randomId } from "@/lib/id";
 import { seedFromString } from "@/sim/rng";
-import { greatCircleKm } from "@/sim/geo";
+import { greatCircleKm, routeFlightHoursPerDay, MAX_DAILY_FLIGHT_HOURS } from "@/sim/geo";
 import { ensureSimUpToDate } from "@/sim/catchup";
 
 const STARTER_CASH_CENTS = 5_000_000_00; // $5M
@@ -251,6 +251,25 @@ export async function openRoute(input: {
   }
   if (acftRow.baseAirportId !== from.id && acftRow.baseAirportId !== to.id) {
     throw new Error(`Aircraft must operate from its base (${acftRow.baseAirportId})`);
+  }
+
+  // Utilisation cap: an aircraft can only fly so many flight-hours/day.
+  const existingRoutes = await db
+    .select({
+      distanceKm: route.distanceKm,
+      frequencyPerWeek: route.frequencyPerWeek,
+    })
+    .from(route)
+    .where(and(eq(route.aircraftId, acftRow.id), eq(route.status, "active")));
+  const existingHours = existingRoutes.reduce(
+    (s, r) => s + routeFlightHoursPerDay(r.distanceKm, r.frequencyPerWeek, type.cruiseSpeedKts),
+    0,
+  );
+  const newHours = routeFlightHoursPerDay(distance, input.frequencyPerWeek, type.cruiseSpeedKts);
+  if (existingHours + newHours > MAX_DAILY_FLIGHT_HOURS) {
+    throw new Error(
+      `${acftRow.tail} is over its daily utilisation cap: ${existingHours.toFixed(1)}h used + ${newHours.toFixed(1)}h new > ${MAX_DAILY_FLIGHT_HOURS}h max. Drop frequency or assign a different tail.`,
+    );
   }
 
   const routeId = randomId("rte");

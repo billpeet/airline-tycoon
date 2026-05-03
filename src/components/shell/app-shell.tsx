@@ -12,6 +12,7 @@ export function AppShell({
   gameYear,
   rateMultiplier,
   rateClass,
+  nextTickAtMs,
   children,
 }: {
   user: SessionUser;
@@ -22,6 +23,7 @@ export function AppShell({
   gameYear?: string;
   rateMultiplier?: number;
   rateClass?: "connected" | "offline";
+  nextTickAtMs?: number;
   children: ReactNode;
 }) {
   return (
@@ -37,6 +39,7 @@ export function AppShell({
           gameYear={gameYear}
           rateMultiplier={rateMultiplier}
           rateClass={rateClass}
+          nextTickAtMs={nextTickAtMs}
         />
         <main className="relative flex-1 px-8 pb-16 pt-2">
           <CompassWatermark />
