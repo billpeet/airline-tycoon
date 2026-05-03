@@ -6,8 +6,8 @@ services:
     image: airline-tycoon:latest
     container_name: airline-tycoon
     restart: unless-stopped
-    ports:
-      - "3000:3000"
+    expose:
+      - "3000"
     environment:
       NODE_ENV: production
       DATABASE_URL: /data/airline-tycoon.sqlite
