@@ -1,11 +1,11 @@
 import { redirect } from "next/navigation";
-import { eq } from "drizzle-orm";
-import { sql } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
   game,
   aircraft,
   route,
+  financeInstrument,
 } from "@/db/schema";
 import { getActiveGame } from "@/lib/session";
 import { AppShell } from "@/components/shell/app-shell";
@@ -36,6 +36,10 @@ export default async function AppGroupLayout({
     .select({ paxN: sql<number>`coalesce(sum(${route.lastDailyPax}), 0)` })
     .from(route)
     .where(eq(route.gameId, g.id));
+  const [{ debtN }] = await db
+    .select({ debtN: sql<number>`coalesce(sum(${financeInstrument.outstandingCents}), 0)` })
+    .from(financeInstrument)
+    .where(and(eq(financeInstrument.gameId, g.id), eq(financeInstrument.kind, "loan"), eq(financeInstrument.status, "active")));
 
   // Effective rate: connected uses the player's chosen multiplier, offline forces 0.5×.
   const effectiveRate =
@@ -51,10 +55,15 @@ export default async function AppGroupLayout({
       tone: g.cashCents < 0 ? "negative" : "positive",
       flap: ctx.catchup ? ctx.catchup.ranDays > 0 : false,
     },
+    {
+      code: "DEBT",
+      label: "Outstanding",
+      value: Number(debtN) > 0 ? formatUsdCents(Number(debtN)) : "—",
+      tone: Number(debtN) > 0 ? "warning" : "neutral",
+    },
     { code: "FLEET", label: "Aircraft", value: pad(Number(fleetN)), flap: false },
     { code: "ROUTES", label: "Active routes", value: pad(Number(routeN)), flap: false },
     { code: "PAX/DAY", label: "Daily pax", value: Number(paxN).toLocaleString(), flap: false },
-    { code: "OTP", label: "On-time", value: "—", tone: "neutral", flap: false },
     {
       code: "REP",
       label: "Reputation",

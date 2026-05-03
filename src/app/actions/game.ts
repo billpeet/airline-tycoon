@@ -12,12 +12,20 @@ import {
   newsEvent,
   airport,
   aircraftType,
+  financeInstrument,
 } from "@/db/schema";
 import { getSessionUser } from "@/lib/session";
 import { randomId } from "@/lib/id";
 import { seedFromString } from "@/sim/rng";
 import { greatCircleKm, routeFlightHoursPerDay, MAX_DAILY_FLIGHT_HOURS } from "@/sim/geo";
 import { ensureSimUpToDate } from "@/sim/catchup";
+import {
+  monthlyPaymentCents,
+  DEFAULT_LOAN_RATE_BPS,
+  DEFAULT_REVOLVER_RATE_BPS,
+  FINANCE_DOWNPAYMENT_PCT,
+  LEASE_DEPOSIT_MONTHS,
+} from "@/sim/finance";
 
 const STARTER_CASH_CENTS = 5_000_000_00; // $5M
 const STARTER_AIRCRAFT_TYPE = "AT43";    // ATR 42-600
@@ -124,9 +132,15 @@ export async function createGame(input: {
 // Acquire an aircraft (cash purchase)
 // ---------------------------------------------------------------------------
 
+export type AcquireMode =
+  | { kind: "cash" }
+  | { kind: "finance"; termMonths: number }
+  | { kind: "lease"; termMonths: number };
+
 export async function buyAircraft(input: {
   typeId: string;
   baseAirportId: string;
+  mode?: AcquireMode;
 }) {
   const session = await getSessionUser();
   if (!session) throw new Error("Not authenticated");
@@ -145,17 +159,48 @@ export async function buyAircraft(input: {
   });
   if (!home) throw new Error("Base airport not recognised");
 
-  const priceCents = Math.round(type.listPriceMusd * 1_000_000 * 100);
   const fresh = await db.query.game.findFirst({ where: eq(game.id, g.id) });
   if (!fresh) throw new Error("Game vanished");
-  if (fresh.cashCents < priceCents) throw new Error("Not enough cash for this purchase");
 
-  // Generate next tail: count existing + 1, zero-padded
+  const priceCents = Math.round(type.listPriceMusd * 1_000_000 * 100);
+  const mode: AcquireMode = input.mode ?? { kind: "cash" };
+
+  // Compute upfront cash + monthly outflow for the chosen mode
+  let upfrontCents = 0;
+  let monthlyCents = 0;
+  let principalCents = 0;
+  let termMonths = 0;
+  let acquisitionMode: "cash" | "finance" | "lease" = "cash";
+
+  if (mode.kind === "cash") {
+    upfrontCents = priceCents;
+    acquisitionMode = "cash";
+  } else if (mode.kind === "finance") {
+    if (![24, 60, 120].includes(mode.termMonths)) throw new Error("Invalid loan term");
+    acquisitionMode = "finance";
+    termMonths = mode.termMonths;
+    upfrontCents = Math.round(priceCents * FINANCE_DOWNPAYMENT_PCT);
+    principalCents = priceCents - upfrontCents;
+    monthlyCents = monthlyPaymentCents(principalCents, DEFAULT_LOAN_RATE_BPS, termMonths);
+  } else {
+    if (![24, 36, 60].includes(mode.termMonths)) throw new Error("Invalid lease term");
+    acquisitionMode = "lease";
+    termMonths = mode.termMonths;
+    monthlyCents = Math.round(type.leaseRateKusdMonth * 1000 * 100);
+    upfrontCents = monthlyCents * LEASE_DEPOSIT_MONTHS;
+  }
+
+  if (fresh.cashCents < upfrontCents) {
+    throw new Error(
+      `Not enough cash for the upfront payment ($${(upfrontCents / 100 / 1_000_000).toFixed(2)}M)`,
+    );
+  }
+
   const owned = await db.select().from(aircraft).where(eq(aircraft.gameId, g.id));
   const tailNumber = (owned.length + 1).toString().padStart(3, "0");
-
   const aircraftRowId = randomId("acft");
   const now = new Date();
+  const instrumentId = mode.kind !== "cash" ? randomId("fin") : null;
 
   db.transaction((tx) => {
     tx.insert(aircraft).values({
@@ -166,26 +211,104 @@ export async function buyAircraft(input: {
       baseAirportId: home.id,
       status: "in_service",
       acquiredOnDay: fresh.currentDay,
-      acquisitionMode: "cash",
+      acquisitionMode,
+      financeInstrumentId: instrumentId,
       cycleHours: 0,
     }).run();
 
-    tx.insert(txn).values({
-      id: randomId("tx"),
-      gameId: g.id,
-      gameDay: fresh.currentDay,
-      kind: "aircraft_purchase",
-      amountCents: -priceCents,
-      refTable: "aircraft",
-      refId: aircraftRowId,
-      note: `${type.manufacturer} ${type.model} · cash`,
-    }).run();
+    if (mode.kind === "finance" && instrumentId) {
+      tx.insert(financeInstrument).values({
+        id: instrumentId,
+        gameId: g.id,
+        kind: "loan",
+        status: "active",
+        principalCents,
+        outstandingCents: principalCents,
+        monthlyPaymentCents: monthlyCents,
+        rateBps: DEFAULT_LOAN_RATE_BPS,
+        termMonths,
+        monthsPaid: 0,
+        collateralAircraftId: aircraftRowId,
+        startedOnDay: fresh.currentDay,
+        endsOnDay: fresh.currentDay + termMonths * 30,
+        notes: `Aircraft loan · ${type.manufacturer} ${type.model}`,
+      }).run();
+      tx.insert(txn).values({
+        id: randomId("tx"),
+        gameId: g.id,
+        gameDay: fresh.currentDay,
+        kind: "loan_drawdown",
+        amountCents: principalCents,
+        refTable: "finance_instrument",
+        refId: instrumentId,
+        note: `Loan drawdown · ${type.model}`,
+      }).run();
+    }
+
+    if (mode.kind === "lease" && instrumentId) {
+      tx.insert(financeInstrument).values({
+        id: instrumentId,
+        gameId: g.id,
+        kind: "lease",
+        status: "active",
+        principalCents: monthlyCents * termMonths, // notional total
+        outstandingCents: monthlyCents * termMonths,
+        monthlyPaymentCents: monthlyCents,
+        rateBps: 0,
+        termMonths,
+        monthsPaid: 0,
+        collateralAircraftId: aircraftRowId,
+        startedOnDay: fresh.currentDay,
+        endsOnDay: fresh.currentDay + termMonths * 30,
+        notes: `Operating lease · ${type.manufacturer} ${type.model}`,
+      }).run();
+      tx.insert(txn).values({
+        id: randomId("tx"),
+        gameId: g.id,
+        gameDay: fresh.currentDay,
+        kind: "lease_deposit",
+        amountCents: -upfrontCents,
+        refTable: "finance_instrument",
+        refId: instrumentId,
+        note: `Lease deposit (${LEASE_DEPOSIT_MONTHS} months)`,
+      }).run();
+    }
+
+    if (mode.kind === "cash") {
+      tx.insert(txn).values({
+        id: randomId("tx"),
+        gameId: g.id,
+        gameDay: fresh.currentDay,
+        kind: "aircraft_purchase",
+        amountCents: -priceCents,
+        refTable: "aircraft",
+        refId: aircraftRowId,
+        note: `${type.manufacturer} ${type.model} · cash`,
+      }).run();
+    } else if (mode.kind === "finance") {
+      tx.insert(txn).values({
+        id: randomId("tx"),
+        gameId: g.id,
+        gameDay: fresh.currentDay,
+        kind: "aircraft_purchase",
+        amountCents: -upfrontCents,
+        refTable: "aircraft",
+        refId: aircraftRowId,
+        note: `${type.manufacturer} ${type.model} · ${(FINANCE_DOWNPAYMENT_PCT * 100).toFixed(0)}% down`,
+      }).run();
+    }
 
     tx.update(game)
-      .set({ cashCents: fresh.cashCents - priceCents })
+      .set({ cashCents: fresh.cashCents - upfrontCents })
       .where(eq(game.id, g.id))
       .run();
 
+    const modeLabel =
+      mode.kind === "cash"
+        ? "cash"
+        : mode.kind === "finance"
+          ? `loan · ${termMonths}mo`
+          : `lease · ${termMonths}mo`;
     tx.insert(newsEvent).values({
       id: randomId("news"),
       gameId: g.id,
@@ -193,8 +316,8 @@ export async function buyAircraft(input: {
       category: "fleet",
       severity: "good",
       headline: `New tail: ${fresh.airlineCode}-${tailNumber}`,
-      body: `${type.manufacturer} ${type.model} delivered to ${home.city ?? home.name}.`,
-      meta: JSON.stringify({ aircraftId: aircraftRowId, typeId: type.id }),
+      body: `${type.manufacturer} ${type.model} delivered to ${home.city ?? home.name} · ${modeLabel}.`,
+      meta: JSON.stringify({ aircraftId: aircraftRowId, typeId: type.id, mode: mode.kind }),
       pinned: false,
       seen: false,
       createdAt: now,
@@ -202,6 +325,7 @@ export async function buyAircraft(input: {
   });
 
   revalidatePath("/fleet");
+  revalidatePath("/finance");
   revalidatePath("/dashboard");
 }
 
@@ -490,6 +614,208 @@ export async function setRateMultiplier(rate: 1 | 2 | 4 | 8) {
   revalidatePath("/", "layout");
 }
 
+// ---------------------------------------------------------------------------
+// Finance — apply for a stand-alone loan
+// ---------------------------------------------------------------------------
+
+export async function applyForLoan(input: {
+  principalCents: number;
+  termMonths: number;
+}) {
+  const session = await getSessionUser();
+  if (!session) throw new Error("Not authenticated");
+  const g = await db.query.game.findFirst({ where: eq(game.userId, session.user.id) });
+  if (!g) throw new Error("No active game");
+  await ensureSimUpToDate(g.id);
+
+  if (![24, 60, 120].includes(input.termMonths)) throw new Error("Invalid loan term");
+  if (input.principalCents < 100_000_00 || input.principalCents > 200_000_000_00) {
+    throw new Error("Principal must be between $100K and $200M");
+  }
+
+  const monthly = monthlyPaymentCents(input.principalCents, DEFAULT_LOAN_RATE_BPS, input.termMonths);
+  const fresh = await db.query.game.findFirst({ where: eq(game.id, g.id) });
+  if (!fresh) throw new Error("Game vanished");
+
+  const instrumentId = randomId("fin");
+  const now = new Date();
+  db.transaction((tx) => {
+    tx.insert(financeInstrument).values({
+      id: instrumentId,
+      gameId: g.id,
+      kind: "loan",
+      status: "active",
+      principalCents: input.principalCents,
+      outstandingCents: input.principalCents,
+      monthlyPaymentCents: monthly,
+      rateBps: DEFAULT_LOAN_RATE_BPS,
+      termMonths: input.termMonths,
+      monthsPaid: 0,
+      collateralAircraftId: null,
+      startedOnDay: fresh.currentDay,
+      endsOnDay: fresh.currentDay + input.termMonths * 30,
+      notes: "General-purpose bank loan",
+    }).run();
+
+    tx.insert(txn).values({
+      id: randomId("tx"),
+      gameId: g.id,
+      gameDay: fresh.currentDay,
+      kind: "loan_drawdown",
+      amountCents: input.principalCents,
+      refTable: "finance_instrument",
+      refId: instrumentId,
+      note: `Loan drawdown · ${input.termMonths}mo`,
+    }).run();
+
+    tx.update(game)
+      .set({ cashCents: fresh.cashCents + input.principalCents })
+      .where(eq(game.id, g.id))
+      .run();
+
+    tx.insert(newsEvent).values({
+      id: randomId("news"),
+      gameId: g.id,
+      gameDay: fresh.currentDay,
+      category: "finance",
+      severity: "info",
+      headline: `Drew down a ${input.termMonths}-month loan`,
+      body: `Principal $${(input.principalCents / 100 / 1_000_000).toFixed(2)}M · monthly P&I $${(monthly / 100).toLocaleString()}.`,
+      meta: JSON.stringify({ instrumentId }),
+      pinned: false,
+      seen: false,
+      createdAt: now,
+    }).run();
+  });
+
+  revalidatePath("/finance");
+  revalidatePath("/dashboard");
+}
+
+export async function repayLoan(input: { instrumentId: string; amountCents: number }) {
+  const session = await getSessionUser();
+  if (!session) throw new Error("Not authenticated");
+  const g = await db.query.game.findFirst({ where: eq(game.userId, session.user.id) });
+  if (!g) throw new Error("No active game");
+  await ensureSimUpToDate(g.id);
+
+  const inst = await db.query.financeInstrument.findFirst({
+    where: and(eq(financeInstrument.id, input.instrumentId), eq(financeInstrument.gameId, g.id)),
+  });
+  if (!inst || inst.kind !== "loan" || inst.status !== "active") {
+    throw new Error("Loan not found or already paid");
+  }
+  const fresh = await db.query.game.findFirst({ where: eq(game.id, g.id) });
+  if (!fresh) throw new Error("Game vanished");
+
+  const pay = Math.max(0, Math.min(input.amountCents, inst.outstandingCents));
+  if (pay <= 0) throw new Error("Nothing to repay");
+  if (fresh.cashCents < pay) throw new Error("Not enough cash for early repayment");
+
+  const newOutstanding = inst.outstandingCents - pay;
+  db.transaction((tx) => {
+    tx.update(financeInstrument)
+      .set({
+        outstandingCents: newOutstanding,
+        status: newOutstanding <= 0 ? "paid_off" : "active",
+      })
+      .where(eq(financeInstrument.id, inst.id))
+      .run();
+    tx.insert(txn).values({
+      id: randomId("tx"),
+      gameId: g.id,
+      gameDay: fresh.currentDay,
+      kind: "loan_payment",
+      amountCents: -pay,
+      refTable: "finance_instrument",
+      refId: inst.id,
+      note: "Early repayment",
+    }).run();
+    tx.update(game).set({ cashCents: fresh.cashCents - pay }).where(eq(game.id, g.id)).run();
+  });
+
+  revalidatePath("/finance");
+  revalidatePath("/dashboard");
+}
+
+// ---------------------------------------------------------------------------
+// Revolver
+// ---------------------------------------------------------------------------
+
+export async function openRevolver(input: { limitCents: number }) {
+  const session = await getSessionUser();
+  if (!session) throw new Error("Not authenticated");
+  const g = await db.query.game.findFirst({ where: eq(game.userId, session.user.id) });
+  if (!g) throw new Error("No active game");
+  await ensureSimUpToDate(g.id);
+
+  const existing = await db.query.financeInstrument.findFirst({
+    where: and(
+      eq(financeInstrument.gameId, g.id),
+      eq(financeInstrument.kind, "revolver"),
+      eq(financeInstrument.status, "active"),
+    ),
+  });
+  if (existing) throw new Error("A revolver is already open");
+  if (input.limitCents < 100_000_00 || input.limitCents > 50_000_000_00) {
+    throw new Error("Limit must be between $100K and $50M");
+  }
+
+  const id = randomId("fin");
+  const now = new Date();
+  db.transaction((tx) => {
+    tx.insert(financeInstrument).values({
+      id,
+      gameId: g.id,
+      kind: "revolver",
+      status: "active",
+      principalCents: input.limitCents,
+      outstandingCents: 0,
+      monthlyPaymentCents: 0,
+      rateBps: DEFAULT_REVOLVER_RATE_BPS,
+      termMonths: 0,
+      monthsPaid: 0,
+      collateralAircraftId: null,
+      startedOnDay: g.currentDay,
+      endsOnDay: null,
+      notes: `Revolver · $${(input.limitCents / 100 / 1_000_000).toFixed(2)}M limit`,
+    }).run();
+    tx.insert(newsEvent).values({
+      id: randomId("news"),
+      gameId: g.id,
+      gameDay: g.currentDay,
+      category: "finance",
+      severity: "info",
+      headline: `Opened a revolving credit facility`,
+      body: `$${(input.limitCents / 100 / 1_000_000).toFixed(2)}M limit · ${(DEFAULT_REVOLVER_RATE_BPS / 100).toFixed(2)}% APR on overdrawn balance.`,
+      meta: JSON.stringify({ instrumentId: id }),
+      pinned: false,
+      seen: false,
+      createdAt: now,
+    }).run();
+  });
+
+  revalidatePath("/finance");
+}
+
+export async function closeRevolver(instrumentId: string) {
+  const session = await getSessionUser();
+  if (!session) throw new Error("Not authenticated");
+  const g = await db.query.game.findFirst({ where: eq(game.userId, session.user.id) });
+  if (!g) throw new Error("No active game");
+  await ensureSimUpToDate(g.id);
+
+  const fresh = await db.query.game.findFirst({ where: eq(game.id, g.id) });
+  if (!fresh) throw new Error("Game vanished");
+  if (fresh.cashCents < 0) throw new Error("Bring your cash above zero before closing the revolver");
+
+  await db.update(financeInstrument)
+    .set({ status: "closed" })
+    .where(and(eq(financeInstrument.id, instrumentId), eq(financeInstrument.gameId, g.id)));
+  revalidatePath("/finance");
+}
+
+// ---------------------------------------------------------------------------
 export async function markAllNewsSeen() {
   const session = await getSessionUser();
   if (!session) throw new Error("Not authenticated");

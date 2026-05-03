@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { ArrowUpRight, X, Network } from "lucide-react";
 import { openRoute } from "@/app/actions/game";
 import { cn } from "@/lib/utils";
@@ -95,6 +95,7 @@ function OpenRouteDialog({
   const [toAirport, setToAirport] = useState<AirportLite | null>(null);
   const [fareEconomy, setFareEconomy] = useState<number>(180);
   const [frequency, setFrequency] = useState<number>(7);
+  const [competitors, setCompetitors] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const router = useRouter();
@@ -116,6 +117,24 @@ function OpenRouteDialog({
   const distance = useMemo(() => {
     if (!fromAirport || !toAirport) return 0;
     return greatCircleKm(fromAirport.lat, fromAirport.lon, toAirport.lat, toAirport.lon);
+  }, [fromAirport, toAirport]);
+
+  // Fetch competitor count when both endpoints are set
+  useEffect(() => {
+    if (!fromAirport || !toAirport) {
+      setCompetitors(null);
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/airports/competitors?from=${fromAirport.id}&to=${toAirport.id}`)
+      .then((r) => r.json())
+      .then((j) => {
+        if (!cancelled) setCompetitors(typeof j.count === "number" ? j.count : 0);
+      })
+      .catch(() => !cancelled && setCompetitors(0));
+    return () => {
+      cancelled = true;
+    };
   }, [fromAirport, toAirport]);
 
   const projection = useMemo(() => {
@@ -142,7 +161,8 @@ function OpenRouteDialog({
     const yourCents = fareEconomy * 100;
     const elastic = Math.max(0.15, Math.min(1.8, Math.exp(-1.4 * (yourCents / market - 1))));
     const rep = 0.6 + (reputation / 100) * 0.8;
-    const expectedPax = Math.round(sizeMix * hubBonus * distFactor * 380 * elastic * rep);
+    const compMul = 1 / (1 + 0.25 * (competitors ?? 0));
+    const expectedPax = Math.round(sizeMix * hubBonus * distFactor * 380 * elastic * rep * compMul);
     const realised = Math.min(seatsPerDay, expectedPax);
     const load = seatsPerDay > 0 ? realised / seatsPerDay : 0;
     return {
@@ -157,8 +177,9 @@ function OpenRouteDialog({
       usedHours,
       totalAfter,
       utilOk,
+      compMul,
     };
-  }, [aircraft, fromAirport, toAirport, distance, fareEconomy, frequency, reputation, usedHoursByAircraft]);
+  }, [aircraft, fromAirport, toAirport, distance, fareEconomy, frequency, reputation, usedHoursByAircraft, competitors]);
 
   const canSubmit =
     !!aircraft &&
@@ -303,6 +324,17 @@ function OpenRouteDialog({
               <Stat
                 k="This route adds"
                 v={`${projection.newDailyHours.toFixed(1)}h / day`}
+              />
+              <Stat
+                k="Competitors"
+                v={
+                  competitors === null
+                    ? "—"
+                    : competitors === 0
+                      ? "0 · clear"
+                      : `${competitors} · ×${projection.compMul.toFixed(2)}`
+                }
+                tone={competitors === null ? undefined : competitors === 0 ? "positive" : competitors >= 4 ? "negative" : undefined}
               />
             </div>
           )}

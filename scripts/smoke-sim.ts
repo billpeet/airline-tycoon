@@ -23,7 +23,9 @@ import {
   route,
   txn,
   newsEvent,
+  financeInstrument,
 } from "@/db/schema";
+import { monthlyPaymentCents, DEFAULT_LOAN_RATE_BPS } from "@/sim/finance";
 import * as schema from "@/db/schema";
 import { randomId } from "@/lib/id";
 import { seedFromString } from "@/sim/rng";
@@ -51,6 +53,7 @@ db.delete(newsEvent).where(eq(newsEvent.gameId, gameId)).run();
 db.delete(txn).where(eq(txn.gameId, gameId)).run();
 db.delete(route).where(eq(route.gameId, gameId)).run();
 db.delete(aircraft).where(eq(aircraft.gameId, gameId)).run();
+db.delete(financeInstrument).where(eq(financeInstrument.gameId, gameId)).run();
 db.delete(game).where(eq(game.id, gameId)).run();
 db.delete(user).where(eq(user.id, userId)).run();
 
@@ -117,7 +120,31 @@ db.insert(route).values({
   status: "active",
 }).run();
 
-console.log(`Founded SmokeJet · cash $5.00M · LHR ↔ CDG, 14×/wk @ $90 econ`);
+// Test Phase 3: take a $2M loan over 60 months
+const loanPrincipal = 2_000_000_00;
+const loanTerm = 60;
+const loanMonthly = monthlyPaymentCents(loanPrincipal, DEFAULT_LOAN_RATE_BPS, loanTerm);
+const loanId = "smoke-loan";
+db.insert(financeInstrument).values({
+  id: loanId,
+  gameId,
+  kind: "loan",
+  status: "active",
+  principalCents: loanPrincipal,
+  outstandingCents: loanPrincipal,
+  monthlyPaymentCents: loanMonthly,
+  rateBps: DEFAULT_LOAN_RATE_BPS,
+  termMonths: loanTerm,
+  monthsPaid: 0,
+  collateralAircraftId: null,
+  startedOnDay: 0,
+  endsOnDay: loanTerm * 30,
+  notes: "Smoke test loan",
+}).run();
+db.update(game).set({ cashCents: 5_000_000_00 + loanPrincipal }).where(eq(game.id, gameId)).run();
+
+console.log(`Founded SmokeJet · cash $7.00M (incl. $2M loan @ ${(DEFAULT_LOAN_RATE_BPS / 100).toFixed(2)}% × ${loanTerm}mo, monthly $${(loanMonthly / 100).toLocaleString()})`);
+console.log(`Route: LHR ↔ CDG, 14×/wk @ $90 econ`);
 console.log(`Advancing ${DAYS_TO_RUN} game-days …`);
 
 // Pretend lastSimulatedAt was N hours ago so catch-up advances the right
@@ -134,13 +161,17 @@ console.log(`Catch-up: ran ${out.ranDays} game-days in ${dt}ms (rate=${out.rateC
 
 const fresh = db.select().from(game).where(eq(game.id, gameId)).get()!;
 const r = db.select().from(route).where(eq(route.gameId, gameId)).get()!;
+const loan = db.select().from(financeInstrument).where(eq(financeInstrument.id, loanId)).get()!;
 const news = db.select().from(newsEvent).where(eq(newsEvent.gameId, gameId)).orderBy(desc(newsEvent.gameDay)).all();
 
+const expectedMonthsPaid = Math.floor(fresh.currentDay / 30);
 console.log(`\n— Result —`);
-console.log(`Cash:   ${formatUsdCents(fresh.cashCents)}  (start $5.00M)`);
+console.log(`Cash:   ${formatUsdCents(fresh.cashCents)}  (start $7.00M)`);
 console.log(`Day:    ${fresh.currentDay}`);
 console.log(`Fuel:   $${(fresh.fuelPriceCentsPerLiter / 100).toFixed(2)}/L`);
+console.log(`Rep:    ${fresh.reputation} of 100`);
 console.log(`Route:  ${r.lastDailyPax} pax/day · ${(r.lastLoadFactor * 100).toFixed(0)}% load · ${formatUsdCents(r.lastDailyRevenueCents)} rev · ${formatUsdCents(r.lastDailyCostCents)} cost`);
+console.log(`Loan:   outstanding ${formatUsdCents(loan.outstandingCents)} · ${loan.monthsPaid}/${loan.termMonths} mo paid (expected ${expectedMonthsPaid})`);
 console.log(`\n— Newsroom (${news.length}) —`);
 for (const n of news.slice(0, 10)) {
   console.log(`  [day ${n.gameDay}] ${n.category.padEnd(9)} ${n.severity.padEnd(5)} ${n.headline}`);

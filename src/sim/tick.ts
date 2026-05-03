@@ -32,6 +32,8 @@ export interface TickInputs {
   aircraft: TickAircraft[];
   airports: Map<string, Airport>;
   aircraftTypes: Map<string, AircraftType>;
+  /** competitorCount(fromId, toId) → number of real-world carriers on the pair */
+  competitorCount: (fromAirportId: string, toAirportId: string) => number;
 }
 
 export interface RouteTick {
@@ -87,6 +89,7 @@ export function runTick(input: TickInputs): TickOutput {
       fareCents: r.fareEconomyCents,
       gameDay: input.gameDay,
       reputation: input.reputation,
+      competitorCount: input.competitorCount(r.fromAirportId, r.toAirportId),
     });
 
     // Stochastic noise: ±12% of expected demand

@@ -6,7 +6,7 @@
  * a thing.
  */
 
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
   game,
@@ -16,11 +16,20 @@ import {
   newsEvent,
   airport,
   aircraftType,
+  airlineHub,
+  financeInstrument,
 } from "@/db/schema";
 import { decideElapsed } from "./time";
 import { dailyRng } from "./rng";
 import { runTick, type TickAircraft, type TickRoute } from "./tick";
 import { randomId } from "@/lib/id";
+import { buildCompetitorIndex } from "./competition";
+import {
+  loanMonthlyTick,
+  monthsElapsedSinceStart,
+  revolverDailyInterestCents,
+  REVOLVER_MONTHLY_FEE_CENTS,
+} from "./finance";
 
 export interface CatchupResult {
   ranDays: number;
@@ -56,16 +65,21 @@ export async function ensureSimUpToDate(gameId: string): Promise<CatchupResult> 
   }
 
   // Snapshot reference data once
-  const [airports, types] = await Promise.all([
+  const [airports, types, hubs] = await Promise.all([
     db.select().from(airport),
     db.select().from(aircraftType),
+    db.select({ airlineId: airlineHub.airlineId, airportId: airlineHub.airportId }).from(airlineHub),
   ]);
   const airportMap = new Map(airports.map((a) => [a.id, a]));
   const typeMap = new Map(types.map((t) => [t.id, t]));
+  const competitor = buildCompetitorIndex(hubs);
 
-  const [playerAircraft, playerRoutes] = await Promise.all([
+  const [playerAircraft, playerRoutes, instruments] = await Promise.all([
     db.select().from(aircraft).where(eq(aircraft.gameId, gameId)),
     db.select().from(route).where(eq(route.gameId, gameId)),
+    db.select().from(financeInstrument).where(
+      and(eq(financeInstrument.gameId, gameId), eq(financeInstrument.status, "active")),
+    ),
   ]);
 
   const tickAircraft: TickAircraft[] = playerAircraft.map((a) => ({
@@ -93,9 +107,16 @@ export async function ensureSimUpToDate(gameId: string): Promise<CatchupResult> 
 
   let cash = g.cashCents;
   let fuelPrice = g.fuelPriceCentsPerLiter;
+  let reputation = g.reputation;
   let runningDay = g.currentDay;
   const txnRows: (typeof txn.$inferInsert)[] = [];
   const fuelHistory: number[] = [fuelPrice];
+  const reputationHistory: number[] = [reputation];
+
+  // Mutable copies so we can update outstanding balances over the catch-up
+  type InstrumentMut = typeof instruments[number];
+  const instrumentsMut: InstrumentMut[] = instruments.map((i) => ({ ...i }));
+  const revolver = instrumentsMut.find((i) => i.kind === "revolver");
 
   for (let i = 0; i < decision.gameDays; i++) {
     runningDay++;
@@ -103,15 +124,17 @@ export async function ensureSimUpToDate(gameId: string): Promise<CatchupResult> 
     const out = runTick({
       gameDay: runningDay,
       fuelPriceCentsPerLiter: fuelPrice,
-      reputation: g.reputation,
+      reputation,
       rng,
       routes: tickRoutes,
       aircraft: tickAircraft,
       airports: airportMap,
       aircraftTypes: typeMap,
+      competitorCount: (a, b) => competitor.count(a, b),
     });
 
     let dayNet = 0;
+    let avgLoad = 0;
     for (const rt of out.routeTicks) {
       const acc = perRoute.get(rt.routeId)!;
       const cost = rt.fuelCents + rt.crewCents + rt.landingCents;
@@ -120,17 +143,17 @@ export async function ensureSimUpToDate(gameId: string): Promise<CatchupResult> 
       acc.pax += rt.paxCarried;
       acc.loadSum += rt.loadFactor;
       acc.days += 1;
+      avgLoad += rt.loadFactor;
 
       dayNet += rt.revenueCents - cost;
 
-      // Per-route per-day txn rows would be too noisy across 84-day catch-ups;
-      // we collapse into 4 ledger rows per route per day instead, which is
-      // still rich enough for the finance dashboard later.
       if (rt.revenueCents) txnRows.push(row(gameId, runningDay, "route_revenue", rt.revenueCents, "route", rt.routeId));
       if (rt.fuelCents) txnRows.push(row(gameId, runningDay, "route_fuel", -rt.fuelCents, "route", rt.routeId));
       if (rt.crewCents) txnRows.push(row(gameId, runningDay, "route_crew", -rt.crewCents, "route", rt.routeId));
       if (rt.landingCents) txnRows.push(row(gameId, runningDay, "route_landing", -rt.landingCents, "route", rt.routeId));
     }
+    if (out.routeTicks.length > 0) avgLoad /= out.routeTicks.length;
+
     let idleTotal = 0;
     for (const ic of out.idleCosts) idleTotal += ic.costCents;
     if (idleTotal) {
@@ -139,8 +162,70 @@ export async function ensureSimUpToDate(gameId: string): Promise<CatchupResult> 
     }
 
     cash += dayNet;
+
+    // Reputation drift from average load factor (small daily delta, clamped 0..100)
+    if (out.routeTicks.length > 0) {
+      let repDelta = 0;
+      if (avgLoad >= 0.75) repDelta = 0.05;
+      else if (avgLoad >= 0.45) repDelta = 0.02;
+      else if (avgLoad >= 0.20) repDelta = -0.02;
+      else repDelta = -0.05;
+      reputation = Math.max(0, Math.min(100, reputation + repDelta));
+    }
+
+    // ----- Finance: monthly P&I + lease + revolver fee -----
+    for (const inst of instrumentsMut) {
+      if (inst.status !== "active") continue;
+      if (inst.kind === "revolver") {
+        // Daily interest on overdrawn cash
+        const dailyInt = revolverDailyInterestCents(cash, inst.rateBps);
+        if (dailyInt > 0) {
+          cash -= dailyInt;
+          txnRows.push(row(gameId, runningDay, "revolver_interest", -dailyInt, "finance", inst.id, "Revolver interest"));
+        }
+        // Monthly facility fee on month boundaries since instrument start
+        const monthsNow = monthsElapsedSinceStart(runningDay, inst.startedOnDay);
+        if (monthsNow > inst.monthsPaid) {
+          const monthsDue = monthsNow - inst.monthsPaid;
+          const feeTotal = REVOLVER_MONTHLY_FEE_CENTS * monthsDue;
+          cash -= feeTotal;
+          txnRows.push(row(gameId, runningDay, "revolver_fee", -feeTotal, "finance", inst.id, "Revolver facility fee"));
+          inst.monthsPaid = monthsNow;
+        }
+        continue;
+      }
+
+      // Loans and leases — month-boundary auto-debit
+      const monthsNow = monthsElapsedSinceStart(runningDay, inst.startedOnDay);
+      while (inst.monthsPaid < monthsNow && inst.outstandingCents > 0 && inst.status === "active") {
+        if (inst.kind === "loan") {
+          const t = loanMonthlyTick(inst.outstandingCents, inst.rateBps, inst.termMonths, inst.monthlyPaymentCents);
+          const total = t.principalCents + t.interestCents;
+          cash -= total;
+          txnRows.push(row(gameId, runningDay, "loan_payment", -t.principalCents, "finance", inst.id, "Loan principal"));
+          if (t.interestCents) {
+            txnRows.push(row(gameId, runningDay, "loan_interest", -t.interestCents, "finance", inst.id, "Loan interest"));
+          }
+          inst.outstandingCents = t.newOutstandingCents;
+          inst.monthsPaid += 1;
+          if (t.isFinalPayment) {
+            inst.status = "paid_off";
+          }
+        } else if (inst.kind === "lease") {
+          cash -= inst.monthlyPaymentCents;
+          txnRows.push(row(gameId, runningDay, "lease_payment", -inst.monthlyPaymentCents, "finance", inst.id, "Lease payment"));
+          inst.outstandingCents = Math.max(0, inst.outstandingCents - inst.monthlyPaymentCents);
+          inst.monthsPaid += 1;
+          if (inst.monthsPaid >= inst.termMonths) {
+            inst.status = "closed";
+          }
+        }
+      }
+    }
+
     fuelPrice = out.newFuelPriceCentsPerLiter;
     fuelHistory.push(fuelPrice);
+    reputationHistory.push(reputation);
   }
 
   // -------------------- Persist --------------------
@@ -153,6 +238,8 @@ export async function ensureSimUpToDate(gameId: string): Promise<CatchupResult> 
     airportMap,
     fuelHistory,
     cash - g.cashCents,
+    g.reputation,
+    Math.round(reputation),
   );
 
   db.transaction((tx) => {
@@ -177,12 +264,25 @@ export async function ensureSimUpToDate(gameId: string): Promise<CatchupResult> 
         .run();
     }
 
+    // Persist finance instrument updates
+    for (const inst of instrumentsMut) {
+      tx.update(financeInstrument)
+        .set({
+          outstandingCents: inst.outstandingCents,
+          monthsPaid: inst.monthsPaid,
+          status: inst.status,
+        })
+        .where(eq(financeInstrument.id, inst.id))
+        .run();
+    }
+
     tx
       .update(game)
       .set({
         currentDay: runningDay,
         cashCents: cash,
         fuelPriceCentsPerLiter: fuelPrice,
+        reputation: Math.round(reputation),
         lastSimulatedAt: new Date(g.lastSimulatedAt.getTime() + decision.consumedRealMs),
         lastActiveAt: new Date(now),
       })
@@ -229,6 +329,8 @@ function buildNews(
   airports: Map<string, ReturnType<typeof Map.prototype.get>>,
   fuelHistory: number[],
   cashDelta: number,
+  repBefore: number,
+  repAfter: number,
 ): (typeof newsEvent.$inferInsert)[] {
   const out: (typeof newsEvent.$inferInsert)[] = [];
   const now = new Date();
@@ -284,6 +386,27 @@ function buildNews(
         costCents: acc.cost,
         pax: acc.pax,
       }),
+      pinned: false,
+      seen: false,
+      createdAt: now,
+    });
+  }
+
+  // Reputation milestone (every 10 points crossed)
+  const beforeBucket = Math.floor(repBefore / 10);
+  const afterBucket = Math.floor(repAfter / 10);
+  if (afterBucket !== beforeBucket) {
+    const climbing = afterBucket > beforeBucket;
+    const milestone = (climbing ? afterBucket : beforeBucket) * 10;
+    out.push({
+      id: randomId("news"),
+      gameId,
+      gameDay: headlineDay,
+      category: "milestone",
+      severity: climbing ? "good" : "warn",
+      headline: climbing ? `Reputation crossed ${milestone}` : `Reputation slipped below ${milestone}`,
+      body: `Now sitting at ${repAfter} of 100.`,
+      meta: JSON.stringify({ from: repBefore, to: repAfter }),
       pinned: false,
       seen: false,
       createdAt: now,

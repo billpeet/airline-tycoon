@@ -54,6 +54,8 @@ export function suggestedMarketFareCents(distanceKm: number): number {
   return Math.max(4500, Math.min(120_000, base));
 }
 
+import { competitionPenalty } from "./competition";
+
 export interface DemandInput {
   from: Pick<Airport, "lat" | "size" | "slotConstrained">;
   to: Pick<Airport, "lat" | "size" | "slotConstrained">;
@@ -61,6 +63,8 @@ export interface DemandInput {
   fareCents: number;
   gameDay: number;
   reputation: number;
+  /** Number of competing real-world carriers operating this pair (rough). */
+  competitorCount?: number;
   /** Tunable global coefficient — turn the whole world up or down. */
   globalCoef?: number;
 }
@@ -71,11 +75,12 @@ export interface DemandResult {
   fareElasticity: number;
   seasonality: number;
   basePotential: number;
+  competitionMultiplier: number;
 }
 
 export function computeDemand(input: DemandInput): DemandResult {
   const { from, to, distanceKm, fareCents, gameDay, reputation } = input;
-  const globalCoef = input.globalCoef ?? 380; // tuned so 2 mediums @ 1500km ≈ ~250 pax/day
+  const globalCoef = input.globalCoef ?? 380;
 
   const sizeMix = (SIZE_WEIGHT[from.size] + SIZE_WEIGHT[to.size]) / 2;
   const hubBonus =
@@ -87,8 +92,12 @@ export function computeDemand(input: DemandInput): DemandResult {
   const elastic = fareElasticity(fareCents, market);
   const season = seasonality(gameDay, (from.lat + to.lat) / 2);
   const rep = reputationFactor(reputation);
+  const compMul = competitionPenalty(input.competitorCount ?? 0);
 
-  const expectedPaxPerDay = Math.max(0, Math.round(basePotential * elastic * season * rep));
+  const expectedPaxPerDay = Math.max(
+    0,
+    Math.round(basePotential * elastic * season * rep * compMul),
+  );
 
   return {
     expectedPaxPerDay,
@@ -96,5 +105,6 @@ export function computeDemand(input: DemandInput): DemandResult {
     fareElasticity: elastic,
     seasonality: season,
     basePotential: Math.round(basePotential),
+    competitionMultiplier: compMul,
   };
 }

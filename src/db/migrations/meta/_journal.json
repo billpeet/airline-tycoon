@@ -29,6 +29,13 @@
       "when": 1777808308277,
       "tag": "0003_cloudy_prima",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1777809429438,
+      "tag": "0004_fixed_kingpin",
+      "breakpoints": true
     }
   ]
 }

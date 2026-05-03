@@ -86,6 +86,12 @@ export const aircraft = sqliteTable(
       .notNull()
       .default("cash"),
 
+    /**
+     * Optional: the loan or lease backing this tail. Null = owned outright.
+     * No FK constraint to avoid a circular insert order with finance_instrument.
+     */
+    financeInstrumentId: text("finance_instrument_id"),
+
     // Total cycle hours flown — drives maintenance later
     cycleHours: real("cycle_hours").notNull().default(0),
   },
@@ -164,6 +170,13 @@ export const txn = sqliteTable(
         "aircraft_idle",
         "aircraft_purchase",
         "starter_grant",
+        "loan_drawdown",
+        "loan_payment",
+        "loan_interest",
+        "lease_deposit",
+        "lease_payment",
+        "revolver_interest",
+        "revolver_fee",
       ],
     }).notNull(),
 
@@ -179,6 +192,49 @@ export const txn = sqliteTable(
 );
 
 export type Txn = typeof txn.$inferSelect;
+
+// -----------------------------------------------------------------------------
+// Finance instruments — loans, leases, revolving credit
+// -----------------------------------------------------------------------------
+
+export const financeInstrument = sqliteTable(
+  "finance_instrument",
+  {
+    id: text("id").primaryKey(),
+    gameId: text("game_id")
+      .notNull()
+      .references(() => game.id, { onDelete: "cascade" }),
+
+    kind: text("kind", { enum: ["loan", "lease", "revolver"] }).notNull(),
+    status: text("status", { enum: ["active", "paid_off", "closed", "defaulted"] })
+      .notNull()
+      .default("active"),
+
+    /** For loans: original principal. For leases: monthly × term (notional). For revolvers: the credit limit. */
+    principalCents: integer("principal_cents").notNull(),
+    /** For loans: remaining balance. For leases: remaining contractual payments. For revolvers: drawn amount (always 0; daily interest on cash<0 is the real signal). */
+    outstandingCents: integer("outstanding_cents").notNull(),
+    /** Loans + leases only. */
+    monthlyPaymentCents: integer("monthly_payment_cents").notNull().default(0),
+    /** Annual rate in basis points (1bp = 0.01%). For revolvers: the overdraft rate. */
+    rateBps: integer("rate_bps").notNull().default(0),
+    termMonths: integer("term_months").notNull().default(0),
+    monthsPaid: integer("months_paid").notNull().default(0),
+
+    collateralAircraftId: text("collateral_aircraft_id"), // optional, no FK to keep insert order flexible
+    startedOnDay: integer("started_on_day").notNull(),
+    endsOnDay: integer("ends_on_day"), // null for revolvers
+
+    notes: text("notes"),
+  },
+  (t) => [
+    index("finance_game_idx").on(t.gameId),
+    index("finance_kind_idx").on(t.kind),
+    index("finance_status_idx").on(t.status),
+  ],
+);
+
+export type FinanceInstrument = typeof financeInstrument.$inferSelect;
 
 // -----------------------------------------------------------------------------
 // News events — the structured cards the newsroom renders

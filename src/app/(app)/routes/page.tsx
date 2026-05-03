@@ -1,6 +1,6 @@
 import { eq, and, inArray } from "drizzle-orm";
 import { db } from "@/db/client";
-import { aircraft, aircraftType, airport, game, route } from "@/db/schema";
+import { aircraft, aircraftType, airlineHub, airport, game, route } from "@/db/schema";
 import { getSessionUser } from "@/lib/session";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/shell/page-header";
@@ -12,6 +12,7 @@ import { ReopenRouteButton } from "./reopen-route";
 import { formatUsdCents } from "@/lib/money";
 import { alias } from "drizzle-orm/sqlite-core";
 import { cn } from "@/lib/utils";
+import { buildCompetitorIndex } from "@/sim/competition";
 
 export const dynamic = "force-dynamic";
 
@@ -86,6 +87,12 @@ export default async function RoutesPage() {
     ? await db.select().from(airport).where(inArray(airport.id, baseIds))
     : [];
 
+  // Competitor index for "X carriers on this pair" annotations
+  const hubs = await db
+    .select({ airlineId: airlineHub.airlineId, airportId: airlineHub.airportId })
+    .from(airlineHub);
+  const competitor = buildCompetitorIndex(hubs);
+
   const active = routes.filter((r) => r.status === "active");
   const closed = routes.filter((r) => r.status === "closed");
 
@@ -122,6 +129,7 @@ export default async function RoutesPage() {
                 <Th>Fare</Th>
                 <Th>Freq/wk</Th>
                 <Th>Daily hrs</Th>
+                <Th>Comp.</Th>
                 <Th>Load</Th>
                 <Th>Daily net</Th>
                 <Th></Th>
@@ -153,6 +161,9 @@ export default async function RoutesPage() {
                     <Td className="num-tabular">${(r.fareCents / 100).toFixed(0)}</Td>
                     <Td className="num-tabular">{r.freq}</Td>
                     <Td className="num-tabular">{dailyHrs.toFixed(1)}h</Td>
+                    <Td>
+                      <CompetitorCell count={competitor.count(r.fromId, r.toId)} />
+                    </Td>
                     <Td>
                       <div className={cn("num-tabular text-[13px]", loadText)}>
                         {r.pax.toLocaleString()} <span className="text-ink-faint">/ {seatsPerDay.toLocaleString()}</span>
@@ -236,4 +247,16 @@ function Th({ children }: { children?: React.ReactNode }) {
 }
 function Td({ children, className }: { children?: React.ReactNode; className?: string }) {
   return <td className={`px-4 py-3 align-top ${className ?? ""}`}>{children}</td>;
+}
+
+function CompetitorCell({ count }: { count: number }) {
+  if (count === 0) {
+    return <span className="num-tabular text-[12px] text-hangar">0 · clear</span>;
+  }
+  const tone = count >= 4 ? "text-beacon" : count >= 2 ? "text-runway" : "text-ink";
+  return (
+    <span className={cn("num-tabular text-[12px]", tone)}>
+      {count} carrier{count === 1 ? "" : "s"}
+    </span>
+  );
 }

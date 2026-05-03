@@ -319,6 +319,46 @@ Phase 2 checklist:
 
 **Phase 3 — Depth:** Finance instruments (loans, leases), reputation, staffing, demand model with competition.
 
+Phase 3 checklist:
+
+Schema
+- [x] `finance_instrument` table — kind, status, principal, outstanding, monthly payment, rate (bps), term, months paid, collateral aircraft, start/end days
+- [x] `aircraft.finance_instrument_id` (nullable) so each tail knows its backing loan/lease
+- [x] `txn.kind` extended with `loan_drawdown`, `loan_payment`, `loan_interest`, `lease_deposit`, `lease_payment`, `revolver_interest`, `revolver_fee`
+- [x] Migration `0004_fixed_kingpin.sql` applied
+
+Sim engine
+- [x] Daily revolver interest on overdrawn cash + monthly facility fee
+- [x] Monthly auto-debit: loan P&I (standard amortisation, last-payment overshoot guard); lease payment; closes loan on final payment, lease at term-end
+- [x] Reputation delta per tick from avg load (good ≥75% +0.05 / ok 45–75% +0.02 / mid -0.02 / poor -0.05); clamps 0..100
+- [x] Reputation milestones (every 10 points crossed) emit a `milestone` news card
+- [x] Competition: real-airline-hub count at either endpoint applies `1 / (1 + 0.25 × competitors)` to demand inside `computeDemand`
+
+Server actions
+- [x] `applyForLoan({ principalCents, termMonths })` — stand-alone loan, draws cash + sets up monthly P&I
+- [x] `openRevolver({ limitCents })` + `closeRevolver()` (cash must be ≥ 0 to close)
+- [x] `repayLoan({ instrumentId, amountCents })` — early repayment, no penalty
+- [x] Extended `buyAircraft` with `mode: { kind: "cash" | "finance" | "lease", termMonths? }`; lease uses `aircraftType.leaseRateKusdMonth`
+
+UI
+- [x] Real `/finance` page — balance sheet · P&L (last 30d) · cashflow (last 30d) · full debt schedule with per-row Repay / Close
+- [x] Apply-for-loan and open-revolver dialogs with live preview (monthly P&I, total interest, cash before/after)
+- [x] Acquire-aircraft dialog gains Buy / Finance / Lease tabs with term selector and per-mode breakdown of upfront + monthly + cash-after
+- [x] Topbar KPI strip gains `DEBT` (total outstanding loans)
+- [x] Routes table shows a `Comp.` column ("0 · clear" / "N carriers" with severity colour); open-route wizard fetches `/api/airports/competitors` and shows the demand multiplier in the projection panel
+
+Content
+- [x] News cards for loan drawdown, lease delivery, reputation milestones; route/fleet news already covers fleet additions and route opens
+
+Smoke
+- [x] `bun run scripts/smoke-sim.ts SIM_DAYS=120` — founds airline, takes a $2M loan over 60 months, advances 120 game-days. Confirmed: 2/60 months paid (84 days = 2 whole months), outstanding correctly amortised by ~$60K, reputation drifted 32 → 35 from 79% load, LHR↔CDG demand now realistically depressed vs Phase 2 (75 pax @ 79% load vs old 96 @ 100%) by competition against the real majors hubbed there
+- [x] Mark Phase 3 done; ready for Phase 4 (tech tree, random events, real-airline AI)
+
+Deferred to Phase 3.5 / 4
+- Corporate bonds (Tier 3) · IPO (Tier 4) · fuel hedges (Tier 5)
+- Full staffing model with per-class headcount and training pipeline (the cost line is rolled into crew costs in tick.ts for now)
+- Per-region reputation sub-scores; per-attribute (OTP / safety / comfort / value)
+
 **Phase 4 — Content:** Tech tree, random events, real-airline AI, codeshares, alliances.
 
 **Phase 5 — Endgame:** Merger/prestige loop, specialization branches, balance pass.
