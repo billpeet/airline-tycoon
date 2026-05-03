@@ -47,9 +47,13 @@ export async function ensureSimUpToDate(gameId: string): Promise<CatchupResult> 
   if (!g) return NOOP_RESULT;
 
   const now = Date.now();
-  const decision = decideElapsed(g.lastSimulatedAt, now, g.rateMultiplier);
+  const decision = decideElapsed(g.lastSimulatedAt, g.lastActiveAt, now, g.rateMultiplier);
 
-  if (decision.gameDays <= 0) return { ...NOOP_RESULT, rateClass: decision.rateClass, effectiveRate: decision.effectiveRate };
+  if (decision.gameDays <= 0) {
+    // Touch lastActiveAt so the next call's classification stays "connected".
+    await db.update(game).set({ lastActiveAt: new Date(now) }).where(eq(game.id, gameId));
+    return { ...NOOP_RESULT, rateClass: decision.rateClass, effectiveRate: decision.effectiveRate };
+  }
 
   // Snapshot reference data once
   const [airports, types] = await Promise.all([
@@ -180,6 +184,7 @@ export async function ensureSimUpToDate(gameId: string): Promise<CatchupResult> 
         cashCents: cash,
         fuelPriceCentsPerLiter: fuelPrice,
         lastSimulatedAt: new Date(g.lastSimulatedAt.getTime() + decision.consumedRealMs),
+        lastActiveAt: new Date(now),
       })
       .where(eq(game.id, gameId))
       .run();

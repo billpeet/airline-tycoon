@@ -8,10 +8,11 @@ export function AppShell({
   kpis,
   airlineName,
   airlineCode,
-  gameDate,
-  gameYear,
+  currentDay,
+  lastSimulatedAtMs,
   rateMultiplier,
   rateClass,
+  effectiveRate,
   nextTickAtMs,
   children,
 }: {
@@ -19,10 +20,11 @@ export function AppShell({
   kpis: Kpi[];
   airlineName?: string;
   airlineCode?: string;
-  gameDate?: string;
-  gameYear?: string;
+  currentDay?: number;
+  lastSimulatedAtMs?: number;
   rateMultiplier?: number;
   rateClass?: "connected" | "offline";
+  effectiveRate?: number;
   nextTickAtMs?: number;
   children: ReactNode;
 }) {
@@ -35,10 +37,11 @@ export function AppShell({
           kpis={kpis}
           airlineName={airlineName}
           airlineCode={airlineCode}
-          gameDate={gameDate}
-          gameYear={gameYear}
+          currentDay={currentDay}
+          lastSimulatedAtMs={lastSimulatedAtMs}
           rateMultiplier={rateMultiplier}
           rateClass={rateClass}
+          effectiveRate={effectiveRate}
           nextTickAtMs={nextTickAtMs}
         />
         <main className="relative flex-1 px-8 pb-16 pt-2">

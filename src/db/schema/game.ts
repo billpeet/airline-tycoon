@@ -26,6 +26,12 @@ export const game = sqliteTable(
     // Time
     startedAt: integer("started_at", { mode: "timestamp_ms" }).notNull(),  // real wallclock
     lastSimulatedAt: integer("last_simulated_at", { mode: "timestamp_ms" }).notNull(),
+    /**
+     * Real wallclock of the last user activity (any catch-up call). Used
+     * to decide connected-vs-offline independently of whether a whole
+     * game-day completed between visits.
+     */
+    lastActiveAt: integer("last_active_at", { mode: "timestamp_ms" }),
     currentDay: integer("current_day").notNull().default(0), // game-days since start
     rateMultiplier: integer("rate_multiplier").notNull().default(1), // 1 / 2 / 4 / 8
 

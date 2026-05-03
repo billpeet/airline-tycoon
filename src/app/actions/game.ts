@@ -69,6 +69,7 @@ export async function createGame(input: {
       homeAirportId: homeAirport.id,
       startedAt: now,
       lastSimulatedAt: now,
+      lastActiveAt: now,
       currentDay: 0,
       rateMultiplier: 1,
       rngSeed: seedFromString(`${session.user.id}:${gameId}`),

@@ -10,7 +10,7 @@ import {
 import { getActiveGame } from "@/lib/session";
 import { AppShell } from "@/components/shell/app-shell";
 import { SimPoller } from "@/components/shell/sim-poller";
-import { formatGameDate, nextTickAt } from "@/sim/time";
+import { nextTickAt } from "@/sim/time";
 import { formatUsdCents } from "@/lib/money";
 import type { Kpi } from "@/components/shell/kpi-strip";
 
@@ -37,12 +37,11 @@ export default async function AppGroupLayout({
     .from(route)
     .where(eq(route.gameId, g.id));
 
-  const dateLabel = formatGameDate(g.currentDay);
-
   // Effective rate: connected uses the player's chosen multiplier, offline forces 0.5×.
   const effectiveRate =
     (ctx.catchup?.rateClass ?? "connected") === "offline" ? 0.5 : g.rateMultiplier;
   const nextTickMs = nextTickAt(g.lastSimulatedAt, effectiveRate);
+  const lastSimulatedAtMs = g.lastSimulatedAt.getTime();
 
   const kpis: Kpi[] = [
     {
@@ -72,10 +71,11 @@ export default async function AppGroupLayout({
         kpis={kpis}
         airlineName={g.airlineName}
         airlineCode={g.airlineCode}
-        gameDate={dateLabel.date}
-        gameYear={dateLabel.year}
+        currentDay={g.currentDay}
+        lastSimulatedAtMs={lastSimulatedAtMs}
         rateMultiplier={g.rateMultiplier}
         rateClass={ctx.catchup?.rateClass ?? "connected"}
+        effectiveRate={effectiveRate}
         nextTickAtMs={nextTickMs}
       >
         {children}

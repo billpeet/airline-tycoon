@@ -15,6 +15,7 @@ import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { KpiStrip, type Kpi } from "./kpi-strip";
 import { setRateMultiplier } from "@/app/actions/game";
+import { formatGameDate } from "@/sim/time";
 
 export type SessionUser = {
   name?: string | null;
@@ -26,21 +27,23 @@ export function AppTopbar({
   user,
   airlineName = "Cumulus Air",
   airlineCode = "CMA",
-  gameDate = "—",
-  gameYear = "—",
   kpis,
+  currentDay = 0,
+  lastSimulatedAtMs,
   rateMultiplier = 1,
   rateClass = "connected",
+  effectiveRate = 1,
   nextTickAtMs,
 }: {
   user: SessionUser;
   airlineName?: string;
   airlineCode?: string;
-  gameDate?: string;
-  gameYear?: string;
   kpis: Kpi[];
+  currentDay?: number;
+  lastSimulatedAtMs?: number;
   rateMultiplier?: number;
   rateClass?: "connected" | "offline";
+  effectiveRate?: number;
   nextTickAtMs?: number;
 }) {
   const router = useRouter();
@@ -50,22 +53,6 @@ export function AppTopbar({
     .join("")
     .slice(0, 2)
     .toUpperCase();
-
-  const [wallclock, setWallclock] = useState<string>("");
-  useEffect(() => {
-    const tick = () => {
-      const d = new Date();
-      const h = d.getHours().toString().padStart(2, "0");
-      const m = d.getMinutes().toString().padStart(2, "0");
-      const s = d.getSeconds().toString().padStart(2, "0");
-      const tzMin = -d.getTimezoneOffset();
-      const tz = `${tzMin >= 0 ? "+" : "-"}${Math.floor(Math.abs(tzMin) / 60)}`;
-      setWallclock(`${h}:${m}:${s} UTC${tz}`);
-    };
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, []);
 
   return (
     <header className="border-b border-ink/15 bg-paper">
@@ -132,7 +119,7 @@ export function AppTopbar({
         </DropdownMenu>
       </div>
 
-      {/* Row 2 — wallclock + game date + rate switcher */}
+      {/* Row 2 — in-game clock + next-tick countdown + rate switcher */}
       <div className="flex items-center gap-6 border-t border-ink/10 bg-paper-deep px-5 py-1.5">
         <div className="flex items-center gap-2">
           <span
@@ -144,9 +131,11 @@ export function AppTopbar({
           <span className="label-code text-ink-soft">{rateClass === "offline" ? "Catch-up" : "Live"}</span>
         </div>
         <Divider />
-        <KeyVal k="GAME" v={`${gameDate} · ${gameYear}`} />
-        <Divider />
-        <KeyVal k="REAL" v={wallclock || "—"} />
+        <GameClock
+          currentDay={currentDay}
+          lastSimulatedAtMs={lastSimulatedAtMs}
+          rate={effectiveRate}
+        />
         <Divider />
         <NextTick atMs={nextTickAtMs} />
         <Divider />
@@ -169,21 +158,84 @@ function KeyVal({ k, v }: { k: string; v: string }) {
   );
 }
 
-function NextTick({ atMs }: { atMs?: number }) {
-  const [now, setNow] = useState(() => Date.now());
+/**
+ * Live in-game date+time. Computed client-side from
+ *   gameTime = lastSimulatedAt's day boundary + (now - lastSimulatedAt) × rate
+ * Server renders a placeholder so SSR/CSR markup matches.
+ */
+function GameClock({
+  currentDay,
+  lastSimulatedAtMs,
+  rate,
+}: {
+  currentDay: number;
+  lastSimulatedAtMs?: number;
+  rate: number;
+}) {
+  const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
+    setNow(Date.now());
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
-  if (!atMs) return null;
+
+  if (now === null || lastSimulatedAtMs == null) {
+    return (
+      <div className="flex items-center gap-2">
+        <span className="label-code text-ink-faint">GAME</span>
+        <span className="num-tabular text-[12px] text-ink">—</span>
+      </div>
+    );
+  }
+
+  const elapsedRealMs = Math.max(0, now - lastSimulatedAtMs);
+  // 1 real-ms at rate× = rate × 24 game-ms.
+  const elapsedGameMs = elapsedRealMs * rate * 24;
+  const dayOffset = Math.floor(elapsedGameMs / 86_400_000);
+  const intoDay = elapsedGameMs % 86_400_000;
+  const day = currentDay + dayOffset;
+
+  const h = Math.floor(intoDay / 3_600_000);
+  const m = Math.floor((intoDay / 60_000) % 60);
+  const s = Math.floor((intoDay / 1_000) % 60);
+  const time = `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+
+  const { date, year } = formatGameDate(day);
+
+  return (
+    <div className="flex items-center gap-2">
+      <span className="label-code text-ink-faint">GAME</span>
+      <span className="num-tabular text-[12px] text-ink">
+        {date}, {year} · {time}
+      </span>
+    </div>
+  );
+}
+
+function NextTick({ atMs }: { atMs?: number }) {
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    setNow(Date.now());
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  if (!atMs || now === null) {
+    return (
+      <div className="flex items-center gap-2">
+        <span className="label-code text-ink-faint">NEXT TICK</span>
+        <span className="num-tabular text-[12px] text-ink">—</span>
+      </div>
+    );
+  }
   const remaining = Math.max(0, atMs - now);
   const totalSec = Math.floor(remaining / 1000);
   const h = Math.floor(totalSec / 3600);
   const m = Math.floor((totalSec % 3600) / 60);
   const s = totalSec % 60;
-  const formatted = h > 0
-    ? `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`
-    : `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+  const formatted =
+    h > 0
+      ? `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`
+      : `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   return (
     <div className="flex items-center gap-2">
       <span className="label-code text-ink-faint">NEXT TICK</span>

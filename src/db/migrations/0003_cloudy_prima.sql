@@ -1,0 +1,1 @@
+ALTER TABLE `game` ADD `last_active_at` integer;

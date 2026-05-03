@@ -2,10 +2,24 @@
 
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
-import { Suspense, useMemo } from "react";
+import { Suspense, useEffect, useMemo } from "react";
 import { Earth } from "./earth";
 import { AirportsLayer, type GlobeAirport } from "./airports-layer";
 import { RoutesLayer, type GlobeRoute } from "./routes-layer";
+
+// react-three/fiber still uses THREE.Clock internally; Three.js r177+ warns on
+// every use. We can't fix the upstream, so silence the specific message once.
+let warningSilenced = false;
+function silenceThreeClockWarning() {
+  if (warningSilenced || typeof window === "undefined") return;
+  warningSilenced = true;
+  const orig = console.warn;
+  console.warn = function (...args: unknown[]) {
+    const first = args[0];
+    if (typeof first === "string" && first.includes("THREE.Clock")) return;
+    orig.apply(console, args as []);
+  };
+}
 
 export function Globe({
   airports,
@@ -14,6 +28,9 @@ export function Globe({
   airports: GlobeAirport[];
   routes?: GlobeRoute[];
 }) {
+  useEffect(() => {
+    silenceThreeClockWarning();
+  }, []);
   const data = useMemo<GlobeAirport[]>(() => airports, [airports]);
   const routeData = useMemo<GlobeRoute[]>(() => routes, [routes]);
 

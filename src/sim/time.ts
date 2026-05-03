@@ -32,19 +32,25 @@ export interface ElapsedDecision {
 
 export function decideElapsed(
   lastSimulatedAt: Date | number,
+  lastActiveAt: Date | number | null | undefined,
   now: Date | number,
   rateMultiplier: number,
 ): ElapsedDecision {
-  const lastMs = typeof lastSimulatedAt === "number" ? lastSimulatedAt : lastSimulatedAt.getTime();
+  const lastSimMs = typeof lastSimulatedAt === "number" ? lastSimulatedAt : lastSimulatedAt.getTime();
+  const lastActMs = lastActiveAt == null
+    ? lastSimMs
+    : typeof lastActiveAt === "number" ? lastActiveAt : lastActiveAt.getTime();
   const nowMs = typeof now === "number" ? now : now.getTime();
-  const rawElapsedMs = Math.max(0, nowMs - lastMs);
+
+  const elapsedSinceSimMs = Math.max(0, nowMs - lastSimMs);   // for accounting
+  const inactiveMs = Math.max(0, nowMs - lastActMs);          // for classification
 
   let cappedOffline = false;
-  let consumedRealMs = rawElapsedMs;
+  let consumedRealMs = elapsedSinceSimMs;
   let rateClass: RateClass;
   let effectiveRate: number;
 
-  if (rawElapsedMs <= OFFLINE_THRESHOLD_MS) {
+  if (inactiveMs <= OFFLINE_THRESHOLD_MS) {
     rateClass = "connected";
     effectiveRate = clamp(rateMultiplier, 1, 8);
   } else {
@@ -60,9 +66,8 @@ export function decideElapsed(
     (consumedRealMs / 1000 / REAL_SECONDS_PER_GAME_DAY) * effectiveRate;
   const gameDays = Math.floor(gameDayFraction);
 
-  // We only advance the sim by whole days. Roll back the consumed real-ms
-  // so the leftover fraction carries forward to next visit. This keeps
-  // lastSimulatedAt aligned to whole game-day boundaries.
+  // Whole-day boundaries only. Leftover sub-day time carries forward via
+  // lastSimulatedAt staying behind by exactly that fraction.
   const consumedForWholeDays =
     (gameDays * REAL_SECONDS_PER_GAME_DAY * 1000) / effectiveRate;
 
