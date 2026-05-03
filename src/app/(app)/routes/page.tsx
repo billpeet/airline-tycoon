@@ -7,8 +7,11 @@ import { PageHeader } from "@/components/shell/page-header";
 import { BoardingCard, BoardingCardEyebrow } from "@/components/shell/boarding-card";
 import { OpenRouteButton } from "./open-route";
 import { CloseRouteButton } from "./close-route";
+import { EditRouteButton } from "./edit-route";
+import { ReopenRouteButton } from "./reopen-route";
 import { formatUsdCents } from "@/lib/money";
 import { alias } from "drizzle-orm/sqlite-core";
+import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +27,8 @@ export default async function RoutesPage() {
   const routes = await db
     .select({
       id: route.id,
+      fromId: route.fromAirportId,
+      toId: route.toAirportId,
       fromIata: fromA.iata,
       fromCity: fromA.city,
       toIata: toA.iata,
@@ -36,12 +41,17 @@ export default async function RoutesPage() {
       cost: route.lastDailyCostCents,
       load: route.lastLoadFactor,
       tail: aircraft.tail,
+      aircraftId: aircraft.id,
+      typeId: aircraft.typeId,
+      typicalPax: aircraftType.typicalPax,
+      cruiseSpeedKts: aircraftType.cruiseSpeedKts,
       status: route.status,
     })
     .from(route)
     .innerJoin(fromA, eq(route.fromAirportId, fromA.id))
     .innerJoin(toA, eq(route.toAirportId, toA.id))
     .innerJoin(aircraft, eq(route.aircraftId, aircraft.id))
+    .innerJoin(aircraftType, eq(aircraft.typeId, aircraftType.id))
     .where(and(eq(route.gameId, g.id)));
 
   const fleet = await db
@@ -60,11 +70,11 @@ export default async function RoutesPage() {
     .innerJoin(aircraftType, eq(aircraft.typeId, aircraftType.id))
     .where(and(eq(aircraft.gameId, g.id), eq(aircraft.status, "in_service")));
 
-  // Build per-aircraft used-hours so the wizard can preview headroom.
+  // Build per-aircraft used-hours so the wizards can preview headroom.
   const usedHoursByAircraft: Record<string, number> = {};
   for (const r of routes) {
     if (r.status !== "active") continue;
-    const ac = fleet.find((f) => f.tail === r.tail);
+    const ac = fleet.find((f) => f.id === r.aircraftId);
     if (!ac) continue;
     const KTS_TO_KMH = 1.852;
     const h = (r.distanceKm / (ac.cruiseSpeedKts * KTS_TO_KMH)) * 2 * (r.freq / 7);
@@ -112,7 +122,6 @@ export default async function RoutesPage() {
                 <Th>Fare</Th>
                 <Th>Freq/wk</Th>
                 <Th>Daily hrs</Th>
-                <Th>Daily pax</Th>
                 <Th>Load</Th>
                 <Th>Daily net</Th>
                 <Th></Th>
@@ -121,10 +130,14 @@ export default async function RoutesPage() {
             <tbody>
               {active.map((r) => {
                 const net = r.revenue - r.cost;
-                const ac = fleet.find((f) => f.tail === r.tail);
-                const dailyHrs = ac
-                  ? (r.distanceKm / (ac.cruiseSpeedKts * 1.852)) * 2 * (r.freq / 7)
-                  : 0;
+                const dailyFreq = r.freq / 7;
+                const seatsPerDay = Math.round(r.typicalPax * dailyFreq);
+                const dailyHrs = (r.distanceKm / (r.cruiseSpeedKts * 1.852)) * 2 * dailyFreq;
+                const loadPct = r.load * 100;
+                const loadTone =
+                  loadPct >= 75 ? "bg-hangar" : loadPct >= 45 ? "bg-runway" : "bg-beacon";
+                const loadText =
+                  loadPct >= 75 ? "text-hangar" : loadPct >= 45 ? "text-runway" : "text-beacon";
                 return (
                   <tr key={r.id} className="border-b border-ink/10 last:border-b-0">
                     <Td>
@@ -140,13 +153,45 @@ export default async function RoutesPage() {
                     <Td className="num-tabular">${(r.fareCents / 100).toFixed(0)}</Td>
                     <Td className="num-tabular">{r.freq}</Td>
                     <Td className="num-tabular">{dailyHrs.toFixed(1)}h</Td>
-                    <Td className="num-tabular">{r.pax.toLocaleString()}</Td>
-                    <Td className="num-tabular">{(r.load * 100).toFixed(0)}%</Td>
+                    <Td>
+                      <div className={cn("num-tabular text-[13px]", loadText)}>
+                        {r.pax.toLocaleString()} <span className="text-ink-faint">/ {seatsPerDay.toLocaleString()}</span>
+                      </div>
+                      <div className="mt-1 h-1 w-28 bg-ink/10">
+                        <div
+                          className={cn("h-full", loadTone)}
+                          style={{ width: `${Math.min(100, loadPct)}%` }}
+                        />
+                      </div>
+                      <div className="mt-0.5 num-tabular text-[10px] text-ink-faint">
+                        {loadPct.toFixed(0)}%
+                      </div>
+                    </Td>
                     <Td className={`num-tabular ${net >= 0 ? "text-hangar" : "text-beacon"}`}>
                       {formatUsdCents(net, { sign: "always" })}
                     </Td>
                     <Td>
-                      <CloseRouteButton routeId={r.id} />
+                      <div className="flex items-center gap-3">
+                        <EditRouteButton
+                          route={{
+                            id: r.id,
+                            fromId: r.fromId,
+                            toId: r.toId,
+                            fromIata: r.fromIata,
+                            toIata: r.toIata,
+                            fromCity: r.fromCity,
+                            toCity: r.toCity,
+                            aircraftId: r.aircraftId,
+                            distanceKm: r.distanceKm,
+                            fareEconomyCents: r.fareCents,
+                            frequencyPerWeek: r.freq,
+                          }}
+                          fleet={fleet}
+                          reputation={g.reputation}
+                          usedHoursByAircraft={usedHoursByAircraft}
+                        />
+                        <CloseRouteButton routeId={r.id} />
+                      </div>
                     </Td>
                   </tr>
                 );
@@ -161,11 +206,20 @@ export default async function RoutesPage() {
           <BoardingCardEyebrow code="NET" title="Closed" meta={`${closed.length}`} />
           <ul className="divide-y divide-ink/10 text-[12.5px]">
             {closed.map((r) => (
-              <li key={r.id} className="px-4 py-2 text-ink-soft">
-                <span className="font-mono text-[11px] text-ink-faint">
-                  {r.fromIata} → {r.toIata}
-                </span>{" "}
-                · {r.fromCity} → {r.toCity}
+              <li
+                key={r.id}
+                className="flex items-center justify-between gap-3 px-4 py-3 text-ink-soft"
+              >
+                <span>
+                  <span className="font-mono text-[11px] text-ink-faint">
+                    {r.fromIata} → {r.toIata}
+                  </span>{" "}
+                  · {r.fromCity} → {r.toCity}{" "}
+                  <span className="text-[11px] text-ink-faint">
+                    · {r.freq}×/wk @ ${(r.fareCents / 100).toFixed(0)} on {r.tail}
+                  </span>
+                </span>
+                <ReopenRouteButton routeId={r.id} />
               </li>
             ))}
           </ul>
@@ -181,6 +235,5 @@ function Th({ children }: { children?: React.ReactNode }) {
   );
 }
 function Td({ children, className }: { children?: React.ReactNode; className?: string }) {
-  return <td className={`px-4 py-3 ${className ?? ""}`}>{children}</td>;
+  return <td className={`px-4 py-3 align-top ${className ?? ""}`}>{children}</td>;
 }
-

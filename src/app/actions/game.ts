@@ -327,6 +327,158 @@ export async function closeRoute(routeId: string) {
   revalidatePath("/globe");
 }
 
+// ---------------------------------------------------------------------------
+// Update route — fare, frequency, optionally swap aircraft
+// ---------------------------------------------------------------------------
+
+export async function updateRoute(input: {
+  routeId: string;
+  fareEconomyCents?: number;
+  frequencyPerWeek?: number;
+  aircraftId?: string;
+}) {
+  const session = await getSessionUser();
+  if (!session) throw new Error("Not authenticated");
+  const g = await db.query.game.findFirst({ where: eq(game.userId, session.user.id) });
+  if (!g) throw new Error("No active game");
+  await ensureSimUpToDate(g.id);
+
+  const existing = await db.query.route.findFirst({
+    where: and(eq(route.id, input.routeId), eq(route.gameId, g.id)),
+  });
+  if (!existing) throw new Error("Route not found");
+
+  const newFare = input.fareEconomyCents ?? existing.fareEconomyCents;
+  const newFreq = input.frequencyPerWeek ?? existing.frequencyPerWeek;
+  const newAircraftId = input.aircraftId ?? existing.aircraftId;
+
+  if (newFare < 1000) throw new Error("Fare too low");
+  if (newFreq < 1 || newFreq > 21) throw new Error("Frequency must be 1–21 per week");
+
+  const acftRow = await db.query.aircraft.findFirst({
+    where: and(eq(aircraft.id, newAircraftId), eq(aircraft.gameId, g.id)),
+  });
+  if (!acftRow) throw new Error("Aircraft not in your fleet");
+
+  const type = await db.query.aircraftType.findFirst({
+    where: eq(aircraftType.id, acftRow.typeId),
+  });
+  if (!type) throw new Error("Aircraft type missing");
+
+  // Range check (defensive — distance is fixed for the route)
+  if (existing.distanceKm > type.rangeKm) {
+    throw new Error(`Beyond aircraft range (${Math.round(existing.distanceKm)} km > ${type.rangeKm} km)`);
+  }
+  // Aircraft must operate from one of the route's endpoints
+  if (acftRow.baseAirportId !== existing.fromAirportId && acftRow.baseAirportId !== existing.toAirportId) {
+    throw new Error("Aircraft must be based at one of the route's endpoints");
+  }
+
+  // Utilisation: sum existing routes for the new aircraft EXCLUDING this route
+  // (since we're re-assigning), then add the new hours.
+  const otherRoutes = await db
+    .select({ id: route.id, distanceKm: route.distanceKm, frequencyPerWeek: route.frequencyPerWeek })
+    .from(route)
+    .where(and(eq(route.aircraftId, newAircraftId), eq(route.status, "active")));
+  const existingHours = otherRoutes
+    .filter((r) => r.id !== existing.id)
+    .reduce(
+      (s, r) => s + routeFlightHoursPerDay(r.distanceKm, r.frequencyPerWeek, type.cruiseSpeedKts),
+      0,
+    );
+  const newHours = routeFlightHoursPerDay(existing.distanceKm, newFreq, type.cruiseSpeedKts);
+  if (existingHours + newHours > MAX_DAILY_FLIGHT_HOURS) {
+    throw new Error(
+      `${acftRow.tail} would be over its daily utilisation cap: ${existingHours.toFixed(1)}h other + ${newHours.toFixed(1)}h this route > ${MAX_DAILY_FLIGHT_HOURS}h max.`,
+    );
+  }
+
+  await db
+    .update(route)
+    .set({
+      fareEconomyCents: newFare,
+      frequencyPerWeek: newFreq,
+      aircraftId: newAircraftId,
+    })
+    .where(eq(route.id, existing.id));
+
+  revalidatePath("/routes");
+  revalidatePath("/dashboard");
+  revalidatePath("/globe");
+}
+
+// ---------------------------------------------------------------------------
+// Reopen a closed route (re-validates everything)
+// ---------------------------------------------------------------------------
+
+export async function reopenRoute(routeId: string) {
+  const session = await getSessionUser();
+  if (!session) throw new Error("Not authenticated");
+  const g = await db.query.game.findFirst({ where: eq(game.userId, session.user.id) });
+  if (!g) throw new Error("No active game");
+  await ensureSimUpToDate(g.id);
+
+  const r = await db.query.route.findFirst({
+    where: and(eq(route.id, routeId), eq(route.gameId, g.id)),
+  });
+  if (!r) throw new Error("Route not found");
+  if (r.status === "active") return; // already open
+
+  const acftRow = await db.query.aircraft.findFirst({
+    where: and(eq(aircraft.id, r.aircraftId), eq(aircraft.gameId, g.id)),
+  });
+  if (!acftRow) throw new Error("Original aircraft is no longer in your fleet");
+  if (acftRow.status !== "in_service") throw new Error(`${acftRow.tail} is currently ${acftRow.status.replace("_", " ")}`);
+
+  const type = await db.query.aircraftType.findFirst({ where: eq(aircraftType.id, acftRow.typeId) });
+  if (!type) throw new Error("Aircraft type missing");
+  if (r.distanceKm > type.rangeKm) {
+    throw new Error(`Beyond aircraft range (${Math.round(r.distanceKm)} km > ${type.rangeKm} km)`);
+  }
+
+  // Utilisation cap with current routes
+  const otherRoutes = await db
+    .select({ distanceKm: route.distanceKm, frequencyPerWeek: route.frequencyPerWeek })
+    .from(route)
+    .where(and(eq(route.aircraftId, acftRow.id), eq(route.status, "active")));
+  const existingHours = otherRoutes.reduce(
+    (s, x) => s + routeFlightHoursPerDay(x.distanceKm, x.frequencyPerWeek, type.cruiseSpeedKts),
+    0,
+  );
+  const myHours = routeFlightHoursPerDay(r.distanceKm, r.frequencyPerWeek, type.cruiseSpeedKts);
+  if (existingHours + myHours > MAX_DAILY_FLIGHT_HOURS) {
+    throw new Error(
+      `${acftRow.tail} can't take this route back — would push utilisation to ${(existingHours + myHours).toFixed(1)}h > ${MAX_DAILY_FLIGHT_HOURS}h.`,
+    );
+  }
+
+  const now = new Date();
+  db.transaction((tx) => {
+    tx.update(route)
+      .set({ status: "active", closedOnDay: null })
+      .where(eq(route.id, r.id))
+      .run();
+
+    tx.insert(newsEvent).values({
+      id: randomId("news"),
+      gameId: g.id,
+      gameDay: g.currentDay,
+      category: "routes",
+      severity: "info",
+      headline: `Reopened route on ${acftRow.tail}`,
+      body: `${r.frequencyPerWeek}× weekly · $${(r.fareEconomyCents / 100).toFixed(0)} economy.`,
+      meta: JSON.stringify({ routeId: r.id }),
+      pinned: false,
+      seen: false,
+      createdAt: now,
+    }).run();
+  });
+
+  revalidatePath("/routes");
+  revalidatePath("/dashboard");
+  revalidatePath("/globe");
+}
+
 export async function setRateMultiplier(rate: 1 | 2 | 4 | 8) {
   const session = await getSessionUser();
   if (!session) throw new Error("Not authenticated");
