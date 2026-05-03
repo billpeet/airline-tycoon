@@ -12,16 +12,15 @@ export default function EventsPage() {
       />
       <RunwayStub
         code="EVT · 07"
-        title="Event engine arrives in Phase 4."
-        blurb="Events are templates in the DB with conditions, weights and effect scripts. Categories: macro · geopolitical · technological · operational · opportunity."
+        title="The wire is quiet."
+        blurb="The world doesn't sit still. Once you're flying, this is where the world finds you — economic shocks, opportunities, decisions that need your call before the desk closes."
         bullets={[
-          "Macroeconomic · fuel, FX, interest rates, recessions",
-          "Geopolitical · airspace, sanctions, bilateral agreements",
-          "Technological · new airframes, biofuel mandates",
-          "Operational · strikes, weather seasons, incidents",
-          "Opportunity · codeshares, slot auctions, government tenders",
+          "Macroeconomic — fuel, FX, interest rates, recessions",
+          "Geopolitical — airspace closures, sanctions, new bilateral agreements",
+          "Technological — new airframes, biofuel mandates",
+          "Operational — strikes, weather seasons, incidents",
+          "Opportunity — codeshare offers, slot auctions, government tenders",
         ]}
-        phase="Phase 4"
       />
     </div>
   );

@@ -11,13 +11,13 @@ export function RunwayStub({
   title,
   blurb,
   bullets,
-  phase,
+  status = "Coming soon",
 }: {
   code: string;
   title: string;
   blurb: string;
   bullets: string[];
-  phase: string;
+  status?: string;
 }) {
   return (
     <section className="relative overflow-hidden border border-ink bg-paper">
@@ -30,7 +30,7 @@ export function RunwayStub({
               {code}
             </span>
             <span className="h-px flex-1 bg-ink/30" />
-            <span className="label-code text-ink-faint">{phase}</span>
+            <span className="label-code text-ink-faint">{status}</span>
           </div>
 
           <h2 className="font-display text-[64px] leading-[0.96] tracking-[-0.02em] text-ink">
@@ -55,7 +55,7 @@ export function RunwayStub({
           </ul>
         </div>
 
-        <DepartureMonitor code={code} title={title} phase={phase} />
+        <DepartureMonitor code={code} title={title} status={status} />
       </div>
     </section>
   );
@@ -77,11 +77,11 @@ function RunwayMarkings() {
 function DepartureMonitor({
   code,
   title,
-  phase,
+  status,
 }: {
   code: string;
   title: string;
-  phase: string;
+  status: string;
 }) {
   const rows = [
     { time: "—:—", from: "TBD", to: "TBD", gate: "—", status: "SCHEDULED" },
@@ -124,7 +124,7 @@ function DepartureMonitor({
 
       <div className="mt-4 flex items-center justify-between border-t border-paper/20 pt-3 text-[10px] uppercase tracking-[0.18em] text-paper/55">
         <span>{code}</span>
-        <span>{phase} · {title.toUpperCase()}</span>
+        <span>{status} · {title.toUpperCase()}</span>
       </div>
     </div>
   );

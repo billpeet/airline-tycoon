@@ -12,15 +12,14 @@ export default function NewsPage() {
       />
       <RunwayStub
         code="NWS · 08"
-        title="Newsroom comes online in Phase 2."
-        blurb="The catch-up sim writes structured NewsEvents on every visit; this page is just a beautiful render of that feed."
+        title="No editions printed yet."
+        blurb="Step away for an evening or a week — the press will be running when you get back. Per-route, per-fleet and per-event summaries, written for the time you weren't here."
         bullets={[
           "Per-route, per-fleet and per-event summaries",
-          "Period rollups: last visit · last 7 game-days · last quarter",
-          "Filter by category · severity · region",
-          "Pinned items survive subsequent catch-ups",
+          "Period rollups: last visit · last seven days · last quarter",
+          "Filter by category, severity, region",
+          "Pin the items you want to keep on the front page",
         ]}
-        phase="Phase 2"
       />
     </div>
   );

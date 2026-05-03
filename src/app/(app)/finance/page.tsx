@@ -12,16 +12,15 @@ export default function FinancePage() {
       />
       <RunwayStub
         code="FIN · 05"
-        title="Finance dashboard arrives in Phase 3."
-        blurb="Balance sheet, P&L and cashflow are surfaced as separate views; financing actions are first-class buttons, not buried menus."
+        title="Treasury is dark for now."
+        blurb="Once you start moving real money, this is the desk you'll live on. Balance sheet, P&amp;L and cashflow side by side, with financing actions as first-class buttons rather than buried menus."
         bullets={[
-          "Tier 1 — bank loans, collateralised against airframes",
-          "Tier 2 — operating leases, revolving credit",
-          "Tier 3 — corporate bonds at fixed rate",
-          "Tier 4 — IPO with persistent ownership-% stat",
-          "Tier 5 — fuel hedging contracts (lock for N quarters)",
+          "Bank loans collateralised against your airframes",
+          "Operating leases and revolving credit facilities",
+          "Corporate bonds at fixed rate, longer tenor",
+          "Take the airline public — issue equity, dilute your stake",
+          "Lock fuel costs ahead with hedging contracts",
         ]}
-        phase="Phase 3"
       />
     </div>
   );

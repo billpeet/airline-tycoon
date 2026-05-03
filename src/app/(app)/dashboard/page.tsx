@@ -32,18 +32,16 @@ export default async function DashboardPage() {
         }
       />
 
-      {/* Reference data status — the world has been loaded */}
+      {/* Industry overview */}
       <section className="border border-ink/15 bg-paper-deep">
         <div className="grid grid-cols-2 divide-x divide-ink/10 md:grid-cols-4">
-          <RefStat code="REF" label="Airports loaded" value={airportCount} />
-          <RefStat code="OPR" label="Real airlines tracked" value={airlineCount} />
-          <RefStat code="EQP" label="Aircraft families" value={typeCount} />
+          <RefStat code="NET" label="Airports in the network" value={airportCount} />
+          <RefStat code="OPR" label="Carriers in the market" value={airlineCount} />
+          <RefStat code="EQP" label="Aircraft on the order book" value={typeCount} />
           <div className="flex items-center justify-between gap-3 px-5 py-3.5">
             <div className="flex flex-col">
-              <span className="label-eyebrow">Phase</span>
-              <span className="num-tabular text-[16px] leading-tight">
-                01 · static world
-              </span>
+              <span className="label-eyebrow">Industry</span>
+              <span className="text-[15px] leading-tight">Markets open</span>
             </div>
             <span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-hangar">
               <span className="size-1.5 rounded-full bg-hangar pulse-beacon" />

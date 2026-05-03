@@ -12,16 +12,15 @@ export default function TechPage() {
       />
       <RunwayStub
         code="TEC · 06"
-        title="The tree blossoms in Phase 4."
-        blurb="Branches and prerequisites live in the DB so we can rebalance without a code deploy. Each prestige run alters the weights."
+        title="The tree hasn't grown in yet."
+        blurb="Capability points come from milestones — passengers carried, routes opened, profit thresholds, prestige resets. Spend them on the branch you want to be known for."
         bullets={[
-          "Operations · time acceleration, maintenance efficiency",
-          "Fleet · unlock aircraft families, regional → next-gen",
-          "Network · regions: domestic → continental → transatlantic → APAC → polar",
-          "Finance · loans → leases → bonds → IPO → hedging",
-          "Specialisation · Low-cost · Premium · Cargo · Charter (one only)",
+          "Operations — faster game time, more efficient maintenance, quicker training",
+          "Fleet — unlock aircraft families, regional first then narrowbody, widebody, next-gen",
+          "Network — open new regions: domestic, continental, transatlantic, Asia-Pacific, polar",
+          "Finance — unlock instruments: loans, leases, bonds, IPO, hedging",
+          "Specialisation — Low-cost · Premium · Cargo · Charter (one only — your defining doctrine)",
         ]}
-        phase="Phase 4"
       />
     </div>
   );

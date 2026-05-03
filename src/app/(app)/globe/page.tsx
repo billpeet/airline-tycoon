@@ -11,7 +11,6 @@ import {
 export const dynamic = "force-dynamic";
 
 export default async function GlobePage() {
-  // Pull every airport for the globe (positions only — no joins).
   const airports = await db
     .select({
       id: airport.id,
@@ -30,7 +29,6 @@ export default async function GlobePage() {
     .filter((a) => a.slot_constrained)
     .sort((a, b) => (a.iata ?? "").localeCompare(b.iata ?? ""));
 
-  // Top 8 airlines by fleet size — for the sidecar.
   const topCarriers = await db
     .select({
       id: airline.id,
@@ -47,14 +45,6 @@ export default async function GlobePage() {
     .orderBy(desc(airline.fleetSize))
     .limit(8);
 
-  const counts = {
-    airports: airports.length,
-    large: airports.filter((a) => a.size === "large").length,
-    medium: airports.filter((a) => a.size === "medium").length,
-    slots: slotHubs.length,
-  };
-
-  // Region breakdown for the legend
   const regions = await db
     .select({
       continent: airport.continent,
@@ -69,32 +59,28 @@ export default async function GlobePage() {
         code="GLB · 02"
         meta="World Map"
         title="The whole world, on one table."
-        description={`${counts.airports.toLocaleString()} airports seeded from OurAirports — ${counts.large.toLocaleString()} primary, ${counts.medium.toLocaleString()} secondary, ${counts.slots} slot-constrained hubs in persimmon.`}
+        description="Every commercial airport worth flying to, every hub worth fighting for. Persimmon marks the slot-constrained giants — the hardest doors to get into."
       />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-        {/* Globe canvas */}
         <BoardingCard className="overflow-hidden">
           <BoardingCardEyebrow
             code="MAP"
-            title="Reference network · v0.0.1"
+            title="The world network"
             meta="DRAG · ROTATE · SCROLL · ZOOM"
           />
           <div className="relative h-[640px] bg-paper-deep">
-            {/* Subtle halftone overlay matches the design system */}
             <div className="halftone pointer-events-none absolute inset-0 opacity-[0.05]" />
             <Globe airports={airports} />
 
-            {/* Legend pinned to the canvas */}
             <div className="pointer-events-none absolute bottom-4 left-4 flex gap-4 bg-paper/90 px-3 py-2 backdrop-blur">
               <LegendDot color="#D8451B" label="Slot-constrained hub" />
-              <LegendDot color="#E8B339" label="Large airport" />
-              <LegendDot color="#0F1B2D" label="Medium airport" subtle />
+              <LegendDot color="#E8B339" label="Major airport" />
+              <LegendDot color="#0F1B2D" label="Regional" subtle />
             </div>
           </div>
         </BoardingCard>
 
-        {/* Sidecar panel */}
         <div className="flex flex-col gap-6">
           <BoardingCard>
             <BoardingCardEyebrow code="HUB" title="Slot-constrained" meta={`${slotHubs.length}`} />
@@ -119,7 +105,7 @@ export default async function GlobePage() {
           </BoardingCard>
 
           <BoardingCard>
-            <BoardingCardEyebrow code="OPR" title="Top carriers (fleet)" meta={`${topCarriers.length}`} />
+            <BoardingCardEyebrow code="OPR" title="Largest carriers" meta={`${topCarriers.length}`} />
             <ul className="divide-y divide-ink/10">
               {topCarriers.map((al) => (
                 <li

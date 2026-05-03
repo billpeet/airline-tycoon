@@ -58,7 +58,7 @@ export default async function Home() {
             <div className="flex flex-col items-start gap-4">
               <SignInButton />
               <p className="font-mono text-[10.5px] uppercase tracking-[0.22em] text-ink-faint">
-                Sign in with Google · Phase 0 · build 0.0.1
+                Free to play · Sign in to start your airline
               </p>
             </div>
           </div>

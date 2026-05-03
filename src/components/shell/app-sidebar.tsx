@@ -86,10 +86,10 @@ export function AppSidebar() {
         ))}
       </nav>
 
-      {/* Footer — version stamp like an aircraft data plate */}
+      {/* Footer — operations status plate */}
       <div className="border-t border-sidebar-border px-5 py-4 text-[10px] text-sidebar-foreground/45">
         <div className="flex items-center justify-between font-mono uppercase tracking-[0.22em]">
-          <span>Build · 0.0.1</span>
+          <span>Ops · nominal</span>
           <span className="flex items-center gap-1.5">
             <span className="size-1.5 rounded-full bg-hangar pulse-beacon" />
             Live

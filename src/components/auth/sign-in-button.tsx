@@ -29,7 +29,7 @@ export function SignInButton({ className }: { className?: string }) {
         FLY/01
       </span>
       <span>{pending ? "Boarding…" : "Sign in with Google"}</span>
-      <ArrowUpRight
+      <ArrowUpRight aria-hidden
         className={cn(
           "size-3.5 transition-transform",
           "group-hover:-translate-y-0.5 group-hover:translate-x-0.5",

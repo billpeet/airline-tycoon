@@ -12,15 +12,14 @@ export default function RoutesPage() {
       />
       <RunwayStub
         code="NET · 04"
-        title="Route configurator lands in Phase 2."
-        blurb="Hub-and-spoke bonuses reward connecting passengers; slot constraints at premium airports gate the busiest hubs."
+        title="No routes filed yet."
+        blurb="Plan a city pair and the planner shows you the catchment, the competition, and what kind of fare it'll bear — before you sink capital into the first weekly frequency."
         bullets={[
-          "Real airports (top ~1500 by traffic) seeded into reference DB",
-          "Visible demand model: city size · competitor presence · seasonality",
-          "Slot acquisition at major airports",
-          "Competitor AI response when you open against them",
+          "Visible demand model: city size, business / leisure mix, seasonality",
+          "Hub-and-spoke bonuses for passengers connecting through your hubs",
+          "Slot acquisition at the busiest airports — they don't grow back",
+          "See competitor responses before you commit to opening against an entrenched carrier",
         ]}
-        phase="Phase 2"
       />
     </div>
   );

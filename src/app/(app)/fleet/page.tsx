@@ -12,15 +12,14 @@ export default function FleetPage() {
       />
       <RunwayStub
         code="FLT · 03"
-        title="Fleet management arrives in Phase 2."
-        blurb="Aircraft families seeded from real-world reference data: A220, A320, A330, A350, 737, 777, 787, ATR-72, and the Embraer E-Jets to start."
+        title="Hangar doors are still closed."
+        blurb="The order book opens once you've signed your operating certificate. Modern Boeing, Airbus, Embraer, ATR and De Havilland frames are all on offer — from regional turboprops up to the long-haul widebodies."
         bullets={[
-          "Acquisition modes: buy · finance · operating lease · used",
-          "Utilisation, C/D-check schedule, retirement curve",
-          "Per-aircraft P&L drilldown",
-          "Crew & maintenance lead-time pipeline",
+          "Pick your acquisition: buy outright, finance, lease, or pick up a used hull",
+          "Track utilisation, C/D-check schedules and the retirement curve per tail",
+          "Per-aircraft profit and loss — find the dogs and ground them",
+          "Crew and maintenance pipelines so you can't just hire a hundred captains overnight",
         ]}
-        phase="Phase 2"
       />
     </div>
   );
