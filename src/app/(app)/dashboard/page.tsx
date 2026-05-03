@@ -1,4 +1,7 @@
-import { ArrowUpRight, Plane, Wallet, AlertTriangle, Sparkles } from "lucide-react";
+import { ArrowUpRight, AlertTriangle, Sparkles, Plane } from "lucide-react";
+import { sql } from "drizzle-orm";
+import { db } from "@/db/client";
+import { airport, airline, aircraftType } from "@/db/schema";
 import { PageHeader } from "@/components/shell/page-header";
 import {
   BoardingCard,
@@ -7,7 +10,13 @@ import {
 } from "@/components/shell/boarding-card";
 import { cn } from "@/lib/utils";
 
-export default function DashboardPage() {
+export const dynamic = "force-dynamic";
+
+export default async function DashboardPage() {
+  const [{ n: airportCount }] = await db.select({ n: sql<number>`count(*)` }).from(airport);
+  const [{ n: airlineCount }] = await db.select({ n: sql<number>`count(*)` }).from(airline);
+  const [{ n: typeCount }] = await db.select({ n: sql<number>`count(*)` }).from(aircraftType);
+
   return (
     <div className="flex flex-col gap-10">
       <PageHeader
@@ -22,6 +31,27 @@ export default function DashboardPage() {
           </button>
         }
       />
+
+      {/* Reference data status — the world has been loaded */}
+      <section className="border border-ink/15 bg-paper-deep">
+        <div className="grid grid-cols-2 divide-x divide-ink/10 md:grid-cols-4">
+          <RefStat code="REF" label="Airports loaded" value={airportCount} />
+          <RefStat code="OPR" label="Real airlines tracked" value={airlineCount} />
+          <RefStat code="EQP" label="Aircraft families" value={typeCount} />
+          <div className="flex items-center justify-between gap-3 px-5 py-3.5">
+            <div className="flex flex-col">
+              <span className="label-eyebrow">Phase</span>
+              <span className="num-tabular text-[16px] leading-tight">
+                01 · static world
+              </span>
+            </div>
+            <span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-hangar">
+              <span className="size-1.5 rounded-full bg-hangar pulse-beacon" />
+              Live
+            </span>
+          </div>
+        </div>
+      </section>
 
       {/* Today on the board — boarding-pass cards */}
       <section className="grid gap-4 md:grid-cols-3">
@@ -198,6 +228,22 @@ const NEWS = [
     detail: "Slot pair becomes available at BOS for Q2.",
   },
 ];
+
+function RefStat({ code, label, value }: { code: string; label: string; value: number }) {
+  return (
+    <div className="flex items-center gap-4 px-5 py-3.5">
+      <span className="font-mono text-[10.5px] uppercase tracking-[0.28em] text-persimmon">
+        {code}
+      </span>
+      <div className="flex flex-col">
+        <span className="label-eyebrow">{label}</span>
+        <span className="num-tabular text-[18px] leading-tight">
+          {value.toLocaleString()}
+        </span>
+      </div>
+    </div>
+  );
+}
 
 function FleetRow({
   tail,

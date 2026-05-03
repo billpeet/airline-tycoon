@@ -1,27 +1,188 @@
+import { db } from "@/db/client";
+import { airport, airline } from "@/db/schema";
+import { desc, sql } from "drizzle-orm";
+import { Globe } from "@/components/globe/globe";
 import { PageHeader } from "@/components/shell/page-header";
-import { RunwayStub } from "@/components/shell/runway-stub";
+import {
+  BoardingCard,
+  BoardingCardEyebrow,
+} from "@/components/shell/boarding-card";
 
-export default function GlobePage() {
+export const dynamic = "force-dynamic";
+
+export default async function GlobePage() {
+  // Pull every airport for the globe (positions only — no joins).
+  const airports = await db
+    .select({
+      id: airport.id,
+      iata: airport.iata,
+      name: airport.name,
+      city: airport.city,
+      country: airport.country,
+      lat: airport.lat,
+      lon: airport.lon,
+      size: airport.size,
+      slot_constrained: airport.slotConstrained,
+    })
+    .from(airport);
+
+  const slotHubs = airports
+    .filter((a) => a.slot_constrained)
+    .sort((a, b) => (a.iata ?? "").localeCompare(b.iata ?? ""));
+
+  // Top 8 airlines by fleet size — for the sidecar.
+  const topCarriers = await db
+    .select({
+      id: airline.id,
+      iata: airline.iata,
+      icao: airline.icao,
+      name: airline.name,
+      country: airline.country,
+      type: airline.type,
+      alliance: airline.alliance,
+      fleet: airline.fleetSize,
+      color: airline.color,
+    })
+    .from(airline)
+    .orderBy(desc(airline.fleetSize))
+    .limit(8);
+
+  const counts = {
+    airports: airports.length,
+    large: airports.filter((a) => a.size === "large").length,
+    medium: airports.filter((a) => a.size === "medium").length,
+    slots: slotHubs.length,
+  };
+
+  // Region breakdown for the legend
+  const regions = await db
+    .select({
+      continent: airport.continent,
+      n: sql<number>`count(*)`,
+    })
+    .from(airport)
+    .groupBy(airport.continent);
+
   return (
-    <div className="flex flex-col gap-10">
+    <div className="flex flex-col gap-8">
       <PageHeader
         code="GLB · 02"
         meta="World Map"
         title="The whole world, on one table."
-        description="A rotating Earth with great-circle arcs for every active route, competitor heatmaps, and demand intensity by city."
+        description={`${counts.airports.toLocaleString()} airports seeded from OurAirports — ${counts.large.toLocaleString()} primary, ${counts.medium.toLocaleString()} secondary, ${counts.slots} slot-constrained hubs in persimmon.`}
       />
-      <RunwayStub
-        code="GLB · 02"
-        title="Three.js globe lands in Phase 1."
-        blurb="We seed airports, aircraft and real-airline reference data first. Then the globe goes live with toggleable layers for player routes, competitor density, and demand."
-        bullets={[
-          "Seed airports (top ~1500 by traffic) and real-airline networks",
-          "Render great-circle arcs as instanced line geometry",
-          "Layer toggles: player routes · competitor heat · demand",
-          "Decorative aircraft markers (sampled — not a sim source-of-truth)",
-        ]}
-        phase="Phase 1"
+
+      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+        {/* Globe canvas */}
+        <BoardingCard className="overflow-hidden">
+          <BoardingCardEyebrow
+            code="MAP"
+            title="Reference network · v0.0.1"
+            meta="DRAG · ROTATE · SCROLL · ZOOM"
+          />
+          <div className="relative h-[640px] bg-paper-deep">
+            {/* Subtle halftone overlay matches the design system */}
+            <div className="halftone pointer-events-none absolute inset-0 opacity-[0.05]" />
+            <Globe airports={airports} />
+
+            {/* Legend pinned to the canvas */}
+            <div className="pointer-events-none absolute bottom-4 left-4 flex gap-4 bg-paper/90 px-3 py-2 backdrop-blur">
+              <LegendDot color="#D8451B" label="Slot-constrained hub" />
+              <LegendDot color="#E8B339" label="Large airport" />
+              <LegendDot color="#0F1B2D" label="Medium airport" subtle />
+            </div>
+          </div>
+        </BoardingCard>
+
+        {/* Sidecar panel */}
+        <div className="flex flex-col gap-6">
+          <BoardingCard>
+            <BoardingCardEyebrow code="HUB" title="Slot-constrained" meta={`${slotHubs.length}`} />
+            <ul className="max-h-[280px] divide-y divide-ink/10 overflow-y-auto scroll-jet">
+              {slotHubs.map((a) => (
+                <li
+                  key={a.id}
+                  className="flex items-center justify-between gap-3 px-4 py-2.5 text-[12px]"
+                >
+                  <span className="flex items-center gap-3">
+                    <span className="font-mono text-[11px] tracking-[0.1em] text-persimmon">
+                      {a.iata}
+                    </span>
+                    <span className="text-ink">{a.city ?? a.name}</span>
+                  </span>
+                  <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-faint">
+                    {a.country}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </BoardingCard>
+
+          <BoardingCard>
+            <BoardingCardEyebrow code="OPR" title="Top carriers (fleet)" meta={`${topCarriers.length}`} />
+            <ul className="divide-y divide-ink/10">
+              {topCarriers.map((al) => (
+                <li
+                  key={al.id}
+                  className="flex items-center justify-between gap-3 px-4 py-2.5 text-[12px]"
+                >
+                  <span className="flex items-center gap-3">
+                    <span
+                      className="size-2.5 shrink-0 rounded-sm"
+                      style={{ background: al.color ?? "#0F1B2D" }}
+                    />
+                    <span className="font-mono text-[11px] tracking-[0.1em] text-ink">
+                      {al.iata}
+                    </span>
+                    <span className="text-ink">{al.name}</span>
+                  </span>
+                  <span className="num-tabular text-[11px] text-ink-faint">{al.fleet}</span>
+                </li>
+              ))}
+            </ul>
+          </BoardingCard>
+
+          <BoardingCard>
+            <BoardingCardEyebrow code="GEO" title="Coverage by continent" />
+            <ul className="divide-y divide-ink/10">
+              {regions
+                .filter((r) => r.continent)
+                .sort((a, b) => Number(b.n) - Number(a.n))
+                .map((r) => (
+                  <li
+                    key={r.continent}
+                    className="flex items-center justify-between gap-3 px-4 py-2 text-[12px]"
+                  >
+                    <span className="label-code text-ink-soft">{r.continent}</span>
+                    <span className="num-tabular text-[12px] text-ink">
+                      {Number(r.n).toLocaleString()}
+                    </span>
+                  </li>
+                ))}
+            </ul>
+          </BoardingCard>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LegendDot({
+  color,
+  label,
+  subtle,
+}: {
+  color: string;
+  label: string;
+  subtle?: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-ink-soft">
+      <span
+        className={`size-2 rounded-full ${subtle ? "opacity-60" : ""}`}
+        style={{ background: color }}
       />
+      {label}
     </div>
   );
 }

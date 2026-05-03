@@ -1,0 +1,326 @@
+{
+  "$source": "Hand-curated from manufacturer published specifications (Boeing, Airbus, Embraer, ATR, De Havilland Canada). list_price_musd is approximate market value (list prices are notional in commercial aviation), lease_rate_kusd_month is typical operating-lease rate.",
+  "$updated": "2026-05",
+  "aircraft": [
+    {
+      "id": "AT43", "icao_code": "AT43",
+      "manufacturer": "ATR", "family": "ATR 42", "model": "ATR 42-600",
+      "type_class": "turboprop",
+      "range_km": 1326, "typical_pax": 48, "max_pax": 50, "cargo_kg": 4900,
+      "cruise_speed_kts": 300, "mtow_kg": 18600,
+      "list_price_musd": 24, "lease_rate_kusd_month": 80,
+      "fuel_burn_lph": 600, "crew_cockpit": 2, "crew_cabin": 1,
+      "intro_year": 2014, "retired_year": null
+    },
+    {
+      "id": "AT76", "icao_code": "AT76",
+      "manufacturer": "ATR", "family": "ATR 72", "model": "ATR 72-600",
+      "type_class": "turboprop",
+      "range_km": 1528, "typical_pax": 70, "max_pax": 78, "cargo_kg": 7500,
+      "cruise_speed_kts": 275, "mtow_kg": 23000,
+      "list_price_musd": 28, "lease_rate_kusd_month": 130,
+      "fuel_burn_lph": 750, "crew_cockpit": 2, "crew_cabin": 2,
+      "intro_year": 2011, "retired_year": null
+    },
+    {
+      "id": "DH8D", "icao_code": "DH8D",
+      "manufacturer": "De Havilland Canada", "family": "Dash 8", "model": "DHC-8-400 (Q400)",
+      "type_class": "turboprop",
+      "range_km": 2040, "typical_pax": 78, "max_pax": 90, "cargo_kg": 8200,
+      "cruise_speed_kts": 360, "mtow_kg": 30481,
+      "list_price_musd": 33, "lease_rate_kusd_month": 160,
+      "fuel_burn_lph": 1100, "crew_cockpit": 2, "crew_cabin": 2,
+      "intro_year": 2000, "retired_year": null
+    },
+    {
+      "id": "CRJ7", "icao_code": "CRJ7",
+      "manufacturer": "Bombardier", "family": "CRJ", "model": "CRJ700",
+      "type_class": "regional_jet",
+      "range_km": 2655, "typical_pax": 70, "max_pax": 78, "cargo_kg": 6080,
+      "cruise_speed_kts": 447, "mtow_kg": 34019,
+      "list_price_musd": 41, "lease_rate_kusd_month": 100,
+      "fuel_burn_lph": 1750, "crew_cockpit": 2, "crew_cabin": 2,
+      "intro_year": 2001, "retired_year": null
+    },
+    {
+      "id": "CRJ9", "icao_code": "CRJ9",
+      "manufacturer": "Bombardier", "family": "CRJ", "model": "CRJ900",
+      "type_class": "regional_jet",
+      "range_km": 2956, "typical_pax": 90, "max_pax": 90, "cargo_kg": 7050,
+      "cruise_speed_kts": 447, "mtow_kg": 36995,
+      "list_price_musd": 49, "lease_rate_kusd_month": 130,
+      "fuel_burn_lph": 1900, "crew_cockpit": 2, "crew_cabin": 3,
+      "intro_year": 2003, "retired_year": null
+    },
+    {
+      "id": "E170", "icao_code": "E170",
+      "manufacturer": "Embraer", "family": "E-Jet", "model": "E170",
+      "type_class": "regional_jet",
+      "range_km": 3892, "typical_pax": 78, "max_pax": 80, "cargo_kg": 9800,
+      "cruise_speed_kts": 470, "mtow_kg": 37200,
+      "list_price_musd": 46, "lease_rate_kusd_month": 145,
+      "fuel_burn_lph": 1800, "crew_cockpit": 2, "crew_cabin": 2,
+      "intro_year": 2004, "retired_year": null
+    },
+    {
+      "id": "E75L", "icao_code": "E75L",
+      "manufacturer": "Embraer", "family": "E-Jet", "model": "E175",
+      "type_class": "regional_jet",
+      "range_km": 4074, "typical_pax": 88, "max_pax": 88, "cargo_kg": 10200,
+      "cruise_speed_kts": 470, "mtow_kg": 38790,
+      "list_price_musd": 50, "lease_rate_kusd_month": 165,
+      "fuel_burn_lph": 1900, "crew_cockpit": 2, "crew_cabin": 3,
+      "intro_year": 2005, "retired_year": null
+    },
+    {
+      "id": "E190", "icao_code": "E190",
+      "manufacturer": "Embraer", "family": "E-Jet", "model": "E190",
+      "type_class": "regional_jet",
+      "range_km": 4537, "typical_pax": 100, "max_pax": 114, "cargo_kg": 13000,
+      "cruise_speed_kts": 470, "mtow_kg": 51800,
+      "list_price_musd": 55, "lease_rate_kusd_month": 200,
+      "fuel_burn_lph": 2200, "crew_cockpit": 2, "crew_cabin": 3,
+      "intro_year": 2005, "retired_year": null
+    },
+    {
+      "id": "E295", "icao_code": "E295",
+      "manufacturer": "Embraer", "family": "E-Jet E2", "model": "E195-E2",
+      "type_class": "regional_jet",
+      "range_km": 4815, "typical_pax": 132, "max_pax": 146, "cargo_kg": 14400,
+      "cruise_speed_kts": 470, "mtow_kg": 61500,
+      "list_price_musd": 68, "lease_rate_kusd_month": 240,
+      "fuel_burn_lph": 2100, "crew_cockpit": 2, "crew_cabin": 3,
+      "intro_year": 2019, "retired_year": null
+    },
+    {
+      "id": "BCS3", "icao_code": "BCS3",
+      "manufacturer": "Airbus", "family": "A220", "model": "A220-300",
+      "type_class": "narrowbody",
+      "range_km": 6390, "typical_pax": 130, "max_pax": 160, "cargo_kg": 15000,
+      "cruise_speed_kts": 470, "mtow_kg": 67585,
+      "list_price_musd": 91, "lease_rate_kusd_month": 290,
+      "fuel_burn_lph": 2300, "crew_cockpit": 2, "crew_cabin": 3,
+      "intro_year": 2016, "retired_year": null
+    },
+    {
+      "id": "A319", "icao_code": "A319",
+      "manufacturer": "Airbus", "family": "A320 family", "model": "A319",
+      "type_class": "narrowbody",
+      "range_km": 6850, "typical_pax": 124, "max_pax": 156, "cargo_kg": 14500,
+      "cruise_speed_kts": 447, "mtow_kg": 75500,
+      "list_price_musd": 102, "lease_rate_kusd_month": 230,
+      "fuel_burn_lph": 2400, "crew_cockpit": 2, "crew_cabin": 4,
+      "intro_year": 1996, "retired_year": null
+    },
+    {
+      "id": "A320", "icao_code": "A320",
+      "manufacturer": "Airbus", "family": "A320 family", "model": "A320ceo",
+      "type_class": "narrowbody",
+      "range_km": 6150, "typical_pax": 150, "max_pax": 180, "cargo_kg": 16600,
+      "cruise_speed_kts": 447, "mtow_kg": 78000,
+      "list_price_musd": 111, "lease_rate_kusd_month": 270,
+      "fuel_burn_lph": 2500, "crew_cockpit": 2, "crew_cabin": 4,
+      "intro_year": 1988, "retired_year": null
+    },
+    {
+      "id": "A20N", "icao_code": "A20N",
+      "manufacturer": "Airbus", "family": "A320 family", "model": "A320neo",
+      "type_class": "narrowbody",
+      "range_km": 6500, "typical_pax": 150, "max_pax": 194, "cargo_kg": 17400,
+      "cruise_speed_kts": 447, "mtow_kg": 79000,
+      "list_price_musd": 122, "lease_rate_kusd_month": 360,
+      "fuel_burn_lph": 2200, "crew_cockpit": 2, "crew_cabin": 4,
+      "intro_year": 2016, "retired_year": null
+    },
+    {
+      "id": "A21N", "icao_code": "A21N",
+      "manufacturer": "Airbus", "family": "A320 family", "model": "A321neo",
+      "type_class": "narrowbody",
+      "range_km": 7400, "typical_pax": 200, "max_pax": 244, "cargo_kg": 22000,
+      "cruise_speed_kts": 447, "mtow_kg": 97000,
+      "list_price_musd": 142, "lease_rate_kusd_month": 410,
+      "fuel_burn_lph": 2400, "crew_cockpit": 2, "crew_cabin": 5,
+      "intro_year": 2017, "retired_year": null
+    },
+    {
+      "id": "A21X", "icao_code": "A21N",
+      "manufacturer": "Airbus", "family": "A320 family", "model": "A321XLR",
+      "type_class": "narrowbody",
+      "range_km": 8700, "typical_pax": 180, "max_pax": 220, "cargo_kg": 19600,
+      "cruise_speed_kts": 447, "mtow_kg": 101000,
+      "list_price_musd": 158, "lease_rate_kusd_month": 460,
+      "fuel_burn_lph": 2450, "crew_cockpit": 2, "crew_cabin": 5,
+      "intro_year": 2024, "retired_year": null
+    },
+    {
+      "id": "B738", "icao_code": "B738",
+      "manufacturer": "Boeing", "family": "737 NG", "model": "737-800",
+      "type_class": "narrowbody",
+      "range_km": 5765, "typical_pax": 162, "max_pax": 189, "cargo_kg": 17000,
+      "cruise_speed_kts": 453, "mtow_kg": 79010,
+      "list_price_musd": 106, "lease_rate_kusd_month": 250,
+      "fuel_burn_lph": 2600, "crew_cockpit": 2, "crew_cabin": 4,
+      "intro_year": 1998, "retired_year": null
+    },
+    {
+      "id": "B739", "icao_code": "B739",
+      "manufacturer": "Boeing", "family": "737 NG", "model": "737-900ER",
+      "type_class": "narrowbody",
+      "range_km": 5926, "typical_pax": 178, "max_pax": 220, "cargo_kg": 18900,
+      "cruise_speed_kts": 453, "mtow_kg": 85100,
+      "list_price_musd": 112, "lease_rate_kusd_month": 270,
+      "fuel_burn_lph": 2700, "crew_cockpit": 2, "crew_cabin": 5,
+      "intro_year": 2007, "retired_year": null
+    },
+    {
+      "id": "B38M", "icao_code": "B38M",
+      "manufacturer": "Boeing", "family": "737 MAX", "model": "737 MAX 8",
+      "type_class": "narrowbody",
+      "range_km": 6570, "typical_pax": 178, "max_pax": 210, "cargo_kg": 18400,
+      "cruise_speed_kts": 453, "mtow_kg": 82190,
+      "list_price_musd": 121, "lease_rate_kusd_month": 350,
+      "fuel_burn_lph": 2350, "crew_cockpit": 2, "crew_cabin": 5,
+      "intro_year": 2017, "retired_year": null
+    },
+    {
+      "id": "B39M", "icao_code": "B39M",
+      "manufacturer": "Boeing", "family": "737 MAX", "model": "737 MAX 9",
+      "type_class": "narrowbody",
+      "range_km": 6570, "typical_pax": 193, "max_pax": 220, "cargo_kg": 20000,
+      "cruise_speed_kts": 453, "mtow_kg": 88300,
+      "list_price_musd": 129, "lease_rate_kusd_month": 380,
+      "fuel_burn_lph": 2450, "crew_cockpit": 2, "crew_cabin": 5,
+      "intro_year": 2018, "retired_year": null
+    },
+    {
+      "id": "B752", "icao_code": "B752",
+      "manufacturer": "Boeing", "family": "757", "model": "757-200",
+      "type_class": "narrowbody",
+      "range_km": 7222, "typical_pax": 200, "max_pax": 239, "cargo_kg": 25800,
+      "cruise_speed_kts": 458, "mtow_kg": 115680,
+      "list_price_musd": 80, "lease_rate_kusd_month": 220,
+      "fuel_burn_lph": 3200, "crew_cockpit": 2, "crew_cabin": 5,
+      "intro_year": 1983, "retired_year": null
+    },
+    {
+      "id": "A333", "icao_code": "A333",
+      "manufacturer": "Airbus", "family": "A330", "model": "A330-300",
+      "type_class": "widebody",
+      "range_km": 11750, "typical_pax": 277, "max_pax": 440, "cargo_kg": 47900,
+      "cruise_speed_kts": 470, "mtow_kg": 242000,
+      "list_price_musd": 256, "lease_rate_kusd_month": 700,
+      "fuel_burn_lph": 5400, "crew_cockpit": 2, "crew_cabin": 8,
+      "intro_year": 1994, "retired_year": null
+    },
+    {
+      "id": "A339", "icao_code": "A339",
+      "manufacturer": "Airbus", "family": "A330neo", "model": "A330-900",
+      "type_class": "widebody",
+      "range_km": 13334, "typical_pax": 287, "max_pax": 460, "cargo_kg": 47900,
+      "cruise_speed_kts": 470, "mtow_kg": 251000,
+      "list_price_musd": 297, "lease_rate_kusd_month": 920,
+      "fuel_burn_lph": 5100, "crew_cockpit": 2, "crew_cabin": 8,
+      "intro_year": 2018, "retired_year": null
+    },
+    {
+      "id": "A359", "icao_code": "A359",
+      "manufacturer": "Airbus", "family": "A350", "model": "A350-900",
+      "type_class": "widebody",
+      "range_km": 15000, "typical_pax": 315, "max_pax": 440, "cargo_kg": 55000,
+      "cruise_speed_kts": 488, "mtow_kg": 280000,
+      "list_price_musd": 317, "lease_rate_kusd_month": 1050,
+      "fuel_burn_lph": 5700, "crew_cockpit": 2, "crew_cabin": 9,
+      "intro_year": 2015, "retired_year": null
+    },
+    {
+      "id": "A35K", "icao_code": "A35K",
+      "manufacturer": "Airbus", "family": "A350", "model": "A350-1000",
+      "type_class": "widebody",
+      "range_km": 16100, "typical_pax": 369, "max_pax": 480, "cargo_kg": 67400,
+      "cruise_speed_kts": 488, "mtow_kg": 319000,
+      "list_price_musd": 366, "lease_rate_kusd_month": 1280,
+      "fuel_burn_lph": 6100, "crew_cockpit": 2, "crew_cabin": 11,
+      "intro_year": 2018, "retired_year": null
+    },
+    {
+      "id": "A388", "icao_code": "A388",
+      "manufacturer": "Airbus", "family": "A380", "model": "A380-800",
+      "type_class": "widebody",
+      "range_km": 14800, "typical_pax": 525, "max_pax": 853, "cargo_kg": 64000,
+      "cruise_speed_kts": 488, "mtow_kg": 575000,
+      "list_price_musd": 445, "lease_rate_kusd_month": 1500,
+      "fuel_burn_lph": 11500, "crew_cockpit": 2, "crew_cabin": 22,
+      "intro_year": 2007, "retired_year": null
+    },
+    {
+      "id": "B748", "icao_code": "B748",
+      "manufacturer": "Boeing", "family": "747", "model": "747-8 Intercontinental",
+      "type_class": "widebody",
+      "range_km": 14320, "typical_pax": 410, "max_pax": 605, "cargo_kg": 51500,
+      "cruise_speed_kts": 490, "mtow_kg": 447696,
+      "list_price_musd": 419, "lease_rate_kusd_month": 1200,
+      "fuel_burn_lph": 11600, "crew_cockpit": 2, "crew_cabin": 18,
+      "intro_year": 2012, "retired_year": null
+    },
+    {
+      "id": "B763", "icao_code": "B763",
+      "manufacturer": "Boeing", "family": "767", "model": "767-300ER",
+      "type_class": "widebody",
+      "range_km": 11070, "typical_pax": 218, "max_pax": 351, "cargo_kg": 30000,
+      "cruise_speed_kts": 459, "mtow_kg": 186880,
+      "list_price_musd": 219, "lease_rate_kusd_month": 380,
+      "fuel_burn_lph": 5200, "crew_cockpit": 2, "crew_cabin": 7,
+      "intro_year": 1988, "retired_year": null
+    },
+    {
+      "id": "B77W", "icao_code": "B77W",
+      "manufacturer": "Boeing", "family": "777", "model": "777-300ER",
+      "type_class": "widebody",
+      "range_km": 13649, "typical_pax": 365, "max_pax": 550, "cargo_kg": 65300,
+      "cruise_speed_kts": 484, "mtow_kg": 351534,
+      "list_price_musd": 376, "lease_rate_kusd_month": 1100,
+      "fuel_burn_lph": 7500, "crew_cockpit": 2, "crew_cabin": 11,
+      "intro_year": 2004, "retired_year": null
+    },
+    {
+      "id": "B779", "icao_code": "B779",
+      "manufacturer": "Boeing", "family": "777X", "model": "777-9",
+      "type_class": "widebody",
+      "range_km": 13500, "typical_pax": 426, "max_pax": 475, "cargo_kg": 64000,
+      "cruise_speed_kts": 488, "mtow_kg": 351500,
+      "list_price_musd": 442, "lease_rate_kusd_month": 1450,
+      "fuel_burn_lph": 7000, "crew_cockpit": 2, "crew_cabin": 13,
+      "intro_year": 2026, "retired_year": null
+    },
+    {
+      "id": "B788", "icao_code": "B788",
+      "manufacturer": "Boeing", "family": "787", "model": "787-8",
+      "type_class": "widebody",
+      "range_km": 13620, "typical_pax": 248, "max_pax": 359, "cargo_kg": 36000,
+      "cruise_speed_kts": 488, "mtow_kg": 227930,
+      "list_price_musd": 248, "lease_rate_kusd_month": 800,
+      "fuel_burn_lph": 4900, "crew_cockpit": 2, "crew_cabin": 7,
+      "intro_year": 2011, "retired_year": null
+    },
+    {
+      "id": "B789", "icao_code": "B789",
+      "manufacturer": "Boeing", "family": "787", "model": "787-9",
+      "type_class": "widebody",
+      "range_km": 14140, "typical_pax": 296, "max_pax": 406, "cargo_kg": 41400,
+      "cruise_speed_kts": 488, "mtow_kg": 254011,
+      "list_price_musd": 292, "lease_rate_kusd_month": 970,
+      "fuel_burn_lph": 5400, "crew_cockpit": 2, "crew_cabin": 9,
+      "intro_year": 2014, "retired_year": null
+    },
+    {
+      "id": "B78X", "icao_code": "B78X",
+      "manufacturer": "Boeing", "family": "787", "model": "787-10",
+      "type_class": "widebody",
+      "range_km": 11910, "typical_pax": 336, "max_pax": 440, "cargo_kg": 43900,
+      "cruise_speed_kts": 488, "mtow_kg": 254011,
+      "list_price_musd": 338, "lease_rate_kusd_month": 1130,
+      "fuel_burn_lph": 5800, "crew_cockpit": 2, "crew_cabin": 11,
+      "intro_year": 2018, "retired_year": null
+    }
+  ]
+}

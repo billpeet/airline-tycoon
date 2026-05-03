@@ -280,6 +280,22 @@ Phase 0 checklist:
 
 **Phase 1 — Static world:** Seed airports, aircraft, real airlines. 3D globe renders airports + great-circle arcs.
 
+Phase 1 checklist:
+- [x] Add `airport`, `aircraft_type`, `airline`, `airline_hub` tables to Drizzle schema; generate + apply migration (`0001_whole_northstar.sql`)
+- [x] Curate `src/data/seeds/aircraft.json` — 32 commercial types (turboprops → A380/777-9), real specs
+- [x] Curate `src/data/seeds/airlines.json` — 50 carriers (5 AU + 1 NZ · 14 NA · 23 EU · 7 global hubs), IATA/ICAO, hubs (134 total), alliance, fleet size, AI params, brand colours
+- [x] Add `scripts/fetch-airports.ts` — pulls OurAirports CSV, filters to large + (medium-in-focus-regions)
+- [x] Run fetcher; committed `src/data/seeds/airports.json` (2,887 airports — 1,177 large global + 1,710 medium in focus regions)
+- [x] Document data sources + licences in `README.md`
+- [x] Write `scripts/seed.ts` — idempotent upsert across all 4 tables in a single transaction
+- [x] Wire seeding into the Dockerfile entrypoint (after migrations) — verified: container seeds in 320ms on boot
+- [x] Install `three`, `@react-three/fiber`, `@react-three/drei`, `world-atlas`, `topojson-client`, `d3-geo`
+- [x] Build `<Globe>` client component — cream paper sphere · darker land flat-shaded · ink coastlines + tropics/polar graticule · 3-tier airport points (slot-constrained = persimmon, large = runway yellow, medium = ink dots) · OrbitControls with auto-rotate
+- [x] Wire `/globe` page — server fetches all airports + top 8 carriers + per-continent counts; sidecar shows slot-constrained hubs, top carriers (with brand colour swatch), continent coverage
+- [x] Dashboard now surfaces real seed counts in a "REF / OPR / EQP / Phase" strip (the topbar KPIs stay placeholder until Phase 2 brings player game state)
+- [x] Smoke-test: build passes, dev `/globe` returns 307 (auth-gated correctly), docker image rebuilds + boots + seeds + serves in <1s end-to-end
+- [x] Mark Phase 1 done; ready for Phase 2 (core sim)
+
 **Phase 2 — Core sim:** Player can buy 1 aircraft, open 1 route, see profit tick. Time model + offline catch-up + newspaper summary.
 
 **Phase 3 — Depth:** Finance instruments (loans, leases), reputation, staffing, demand model with competition.

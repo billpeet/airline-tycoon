@@ -38,11 +38,13 @@ COPY --from=build --chown=app:app /app/public ./public
 COPY --from=build --chown=app:app /app/package.json ./package.json
 COPY --from=build --chown=app:app /app/next.config.ts ./next.config.ts
 COPY --from=build --chown=app:app /app/src ./src
+COPY --from=build --chown=app:app /app/scripts ./scripts
 COPY --from=build --chown=app:app /app/drizzle.config.ts ./drizzle.config.ts
+COPY --from=build --chown=app:app /app/tsconfig.json ./tsconfig.json
 
 USER app
 EXPOSE 3000
 VOLUME ["/data"]
 
-# Apply pending migrations on boot, then start.
-CMD ["sh", "-c", "bun run src/db/migrate.ts && bun --bun next start -H 0.0.0.0 -p 3000"]
+# Apply pending migrations + (idempotently) seed reference data, then start.
+CMD ["sh", "-c", "bun run src/db/migrate.ts && bun run scripts/seed.ts && bun --bun next start -H 0.0.0.0 -p 3000"]
