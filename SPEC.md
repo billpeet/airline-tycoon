@@ -136,13 +136,66 @@ Three global alliances (Star, OneWorld, SkyTeam) exist as DB entities; player ca
 Desktop-first (the data density wants screen real estate); a responsive mobile dashboard ships in a later phase.
 
 **Primary screens:**
-- **Globe** (default landing) — overview + spatial context.
-- **Routes** — table + map filter, per-route configurator.
-- **Fleet** — table of aircraft, individual aircraft drilldown (utilization, maintenance, P&L).
-- **Finance** — balance sheet, P&L, cashflow, financing actions.
-- **Tech Tree** — branching graph with unlock costs.
-- **Events** — feed of pending decisions and recent consequences.
-- **News** ("morning paper") — the post-offline summary, structured as a scrollable feed of cards.
+- **Operations Centre** (`/dashboard`) — today's board, alerts, fleet status, ledger.
+- **Globe** (`/globe`) — Three.js Earth with route arcs, demand heatmap, competitor density.
+- **Fleet** (`/fleet`) — table of aircraft, individual aircraft drilldown (utilisation, maintenance, P&L).
+- **Routes** (`/routes`) — table + map filter, per-route configurator.
+- **Finance** (`/finance`) — balance sheet, P&L, cashflow, financing actions.
+- **Tech Tree** (`/tech`) — branching graph with unlock costs.
+- **Events** (`/events`) — feed of pending decisions and recent consequences.
+- **Newsroom** (`/news`) — post-offline morning-paper summary feed.
+
+### 7.1 Design System — "Jet-Age Editorial"
+
+A deliberate aesthetic direction: equal parts 1960s airline poster (Pan Am / BOAC / TWA), Vignelli timetable discipline, and modern operations-room precision. **One saturated colour at a time** — the rest is tonal cream and ink.
+
+**Palette** (CSS custom properties, surfaced as Tailwind 4 utilities — `bg-paper`, `text-ink`, `bg-persimmon`, etc.):
+
+| Token | Role | OKLCH |
+|---|---|---|
+| `--color-paper` / `paper-deep` / `paper-edge` | Cream canvas, panel surfaces, rules | warm cream |
+| `--color-ink` / `ink-soft` / `ink-faint` | Primary, secondary, tertiary text | near-black navy |
+| `--color-persimmon` / `persimmon-deep` | Sole saturated accent (CTAs, active state, brand) | warm orange-red |
+| `--color-runway` | Warning / amber alerts | runway-marking yellow |
+| `--color-hangar` | Positive / healthy state | deep service green |
+| `--color-beacon` | Destructive / alert | warning red |
+| `--color-midnight` | Sidebar, hero panels (timetable feel) | deep navy |
+
+**Typography** — three faces, pinned via `next/font` and exposed as `--font-display`, `--font-sans`, `--font-mono`:
+
+- **Fraunces** (variable serif, SOFT + opsz axes) — display headlines, editorial gravitas.
+- **IBM Plex Sans** — UI labels and body, technical-but-warm.
+- **IBM Plex Mono** — tabular data, IATA codes, schedules; tabular-figures and `zero` slashed by default.
+
+Two reusable type primitives: `.label-code` (mono, all-caps, 0.16em tracking) for IATA-style codes, and `.label-eyebrow` (sans, all-caps, 0.28em tracking) for editorial section eyebrows.
+
+**Composition language**:
+- **Three-letter IATA codes** for every navigation destination (`OPS`, `GLB`, `FLT`, `NET`, `FIN`, `TEC`, `EVT`, `NWS`).
+- **Boarding-pass cards** — flat paper, 1px ink border, hard offset shadow, eyebrow strip with code + meta.
+- **Editorial double-rule** under page headers (top: 2px ink + 1px paper gap + 1px ink shadow).
+- **Subtle paper grain** body background (two layered radial-dot gradients).
+- **Compass-rose watermark** drifting at 240s/turn behind dashboard pages.
+
+**Motion**:
+- `flap-in` — split-flap-style number reveal for KPIs (380ms cubic-bezier with overshoot).
+- `pulse-beacon` — slow opacity pulse on the active sidebar item and "Live" indicators.
+- `drift-slow` — 240s rotation on the compass watermark.
+
+**Radii**: deliberately tight (2–4px) — paper documents have crisp edges, not iOS-style softness.
+
+**Memorable elements**:
+- The **departure-board topbar** with airline call-sign card on the left, scrolling KPI strip in the centre (`CASH`, `FLEET`, `ROUTES`, `PAX/DAY`, `OTP`, `REP`), captain chip on the right, and a wallclock/game-time row beneath.
+- **Sidebar as flight-info display** — dark midnight surface, IATA code + full label per item, persimmon beacon on the active row.
+
+### 7.2 Shell architecture
+
+The authenticated app lives under the `(app)` route group, whose layout (`src/app/(app)/layout.tsx`) enforces auth and wraps every page in `<AppShell>`:
+
+- `AppSidebar` — persistent navigation, dark midnight palette, IATA-coded items.
+- `AppTopbar` — airline call-sign + KPI strip + user menu + game/real wallclock row.
+- `PageHeader` — code · eyebrow · display headline · description · actions.
+- `BoardingCard` / `BoardingCardEyebrow` / `StatBlock` — primitives for sectioned content.
+- `RunwayStub` — full-bleed editorial placeholder for not-yet-implemented sections.
 
 ## 8. Tech Stack & Architecture
 
