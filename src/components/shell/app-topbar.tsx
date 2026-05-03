@@ -14,6 +14,7 @@ import { signOut } from "@/lib/auth/client";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { KpiStrip, type Kpi } from "./kpi-strip";
+import { setRateMultiplier } from "@/app/actions/game";
 
 export type SessionUser = {
   name?: string | null;
@@ -25,9 +26,11 @@ export function AppTopbar({
   user,
   airlineName = "Cumulus Air",
   airlineCode = "CMA",
-  gameDate = "Mon 12 Jan",
-  gameYear = "1972",
+  gameDate = "—",
+  gameYear = "—",
   kpis,
+  rateMultiplier = 1,
+  rateClass = "connected",
 }: {
   user: SessionUser;
   airlineName?: string;
@@ -35,6 +38,8 @@ export function AppTopbar({
   gameDate?: string;
   gameYear?: string;
   kpis: Kpi[];
+  rateMultiplier?: number;
+  rateClass?: "connected" | "offline";
 }) {
   const router = useRouter();
   const initials = (user.name ?? user.email ?? "?")
@@ -51,7 +56,9 @@ export function AppTopbar({
       const h = d.getHours().toString().padStart(2, "0");
       const m = d.getMinutes().toString().padStart(2, "0");
       const s = d.getSeconds().toString().padStart(2, "0");
-      setWallclock(`${h}:${m}:${s} UTC${-d.getTimezoneOffset() / 60 >= 0 ? "+" : ""}${-d.getTimezoneOffset() / 60}`);
+      const tzMin = -d.getTimezoneOffset();
+      const tz = `${tzMin >= 0 ? "+" : "-"}${Math.floor(Math.abs(tzMin) / 60)}`;
+      setWallclock(`${h}:${m}:${s} UTC${tz}`);
     };
     tick();
     const id = setInterval(tick, 1000);
@@ -60,9 +67,7 @@ export function AppTopbar({
 
   return (
     <header className="border-b border-ink/15 bg-paper">
-      {/* Row 1 — airline lockup + KPIs + user */}
       <div className="flex items-stretch">
-        {/* Airline / call-sign card */}
         <div className="flex min-w-[260px] items-center gap-3 border-r border-ink/15 px-5 py-2.5">
           <div className="flex h-9 w-9 items-center justify-center bg-persimmon text-paper">
             <span className="font-mono text-[12px] tracking-[0.08em]">
@@ -70,21 +75,15 @@ export function AppTopbar({
             </span>
           </div>
           <div className="flex flex-col gap-0.5">
-            <span className="font-display text-[16px] leading-none">
-              {airlineName}
-            </span>
-            <span className="label-code text-ink-faint">
-              Carrier · Operator
-            </span>
+            <span className="font-display text-[16px] leading-none">{airlineName}</span>
+            <span className="label-code text-ink-faint">Carrier · Operator</span>
           </div>
         </div>
 
-        {/* Live KPI strip — split-flap aesthetic */}
         <div className="flex-1 overflow-x-auto scroll-jet">
           <KpiStrip kpis={kpis} />
         </div>
 
-        {/* User chip */}
         <DropdownMenu>
           <DropdownMenuTrigger
             className={cn(
@@ -131,21 +130,23 @@ export function AppTopbar({
         </DropdownMenu>
       </div>
 
-      {/* Row 2 — wallclock + game date marquee */}
+      {/* Row 2 — wallclock + game date + rate switcher */}
       <div className="flex items-center gap-6 border-t border-ink/10 bg-paper-deep px-5 py-1.5">
         <div className="flex items-center gap-2">
-          <span className="size-1.5 rounded-full bg-persimmon pulse-beacon" />
-          <span className="label-code text-ink-soft">Live</span>
+          <span
+            className={cn(
+              "size-1.5 rounded-full pulse-beacon",
+              rateClass === "offline" ? "bg-runway" : "bg-persimmon",
+            )}
+          />
+          <span className="label-code text-ink-soft">{rateClass === "offline" ? "Catch-up" : "Live"}</span>
         </div>
         <Divider />
         <KeyVal k="GAME" v={`${gameDate} · ${gameYear}`} />
         <Divider />
         <KeyVal k="REAL" v={wallclock || "—"} />
         <Divider />
-        <KeyVal k="RATE" v="1.00× · connected" />
-        <span className="ml-auto label-code text-ink-faint">
-          NXT TICK · 00:42
-        </span>
+        <RateSelector current={rateMultiplier} />
       </div>
     </header>
   );
@@ -160,6 +161,36 @@ function KeyVal({ k, v }: { k: string; v: string }) {
     <div className="flex items-center gap-2">
       <span className="label-code text-ink-faint">{k}</span>
       <span className="num-tabular text-[12px] text-ink">{v}</span>
+    </div>
+  );
+}
+
+function RateSelector({ current }: { current: number }) {
+  const router = useRouter();
+  const options = [1, 2, 4, 8] as const;
+  return (
+    <div className="ml-auto flex items-center gap-2">
+      <span className="label-code text-ink-faint">RATE</span>
+      <div className="flex items-stretch border border-ink/20 font-mono text-[10.5px] tracking-[0.08em]">
+        {options.map((r) => (
+          <button
+            key={r}
+            onClick={async () => {
+              await setRateMultiplier(r);
+              router.refresh();
+            }}
+            className={cn(
+              "px-2 py-1 transition-colors",
+              r === current
+                ? "bg-ink text-paper"
+                : "text-ink-soft hover:bg-paper hover:text-ink",
+              r !== options[0] && "border-l border-ink/20",
+            )}
+          >
+            {r}×
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

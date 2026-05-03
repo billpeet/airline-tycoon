@@ -6,19 +6,39 @@ import { type Kpi } from "./kpi-strip";
 export function AppShell({
   user,
   kpis,
+  airlineName,
+  airlineCode,
+  gameDate,
+  gameYear,
+  rateMultiplier,
+  rateClass,
   children,
 }: {
   user: SessionUser;
   kpis: Kpi[];
+  airlineName?: string;
+  airlineCode?: string;
+  gameDate?: string;
+  gameYear?: string;
+  rateMultiplier?: number;
+  rateClass?: "connected" | "offline";
   children: ReactNode;
 }) {
   return (
     <div className="relative flex min-h-dvh bg-paper text-ink">
       <AppSidebar />
       <div className="flex min-w-0 flex-1 flex-col">
-        <AppTopbar user={user} kpis={kpis} />
+        <AppTopbar
+          user={user}
+          kpis={kpis}
+          airlineName={airlineName}
+          airlineCode={airlineCode}
+          gameDate={gameDate}
+          gameYear={gameYear}
+          rateMultiplier={rateMultiplier}
+          rateClass={rateClass}
+        />
         <main className="relative flex-1 px-8 pb-16 pt-2">
-          {/* Compass-rose watermark in the corner */}
           <CompassWatermark />
           <div className="relative mx-auto max-w-[1280px]">{children}</div>
         </main>
@@ -39,7 +59,6 @@ function CompassWatermark() {
           <circle cx="160" cy="160" r="120" />
           <circle cx="160" cy="160" r="80" />
           <circle cx="160" cy="160" r="40" />
-          {/* 16-point rose */}
           {Array.from({ length: 16 }).map((_, i) => {
             const a = (i * Math.PI * 2) / 16;
             const x1 = 160 + Math.cos(a) * 40;
@@ -58,50 +77,10 @@ function CompassWatermark() {
             );
           })}
         </g>
-        <text
-          x="160"
-          y="40"
-          textAnchor="middle"
-          className="font-mono"
-          fontSize="11"
-          letterSpacing="6"
-          fill="currentColor"
-        >
-          N
-        </text>
-        <text
-          x="280"
-          y="165"
-          textAnchor="middle"
-          className="font-mono"
-          fontSize="11"
-          letterSpacing="6"
-          fill="currentColor"
-        >
-          E
-        </text>
-        <text
-          x="160"
-          y="290"
-          textAnchor="middle"
-          className="font-mono"
-          fontSize="11"
-          letterSpacing="6"
-          fill="currentColor"
-        >
-          S
-        </text>
-        <text
-          x="40"
-          y="165"
-          textAnchor="middle"
-          className="font-mono"
-          fontSize="11"
-          letterSpacing="6"
-          fill="currentColor"
-        >
-          W
-        </text>
+        <text x="160" y="40" textAnchor="middle" className="font-mono" fontSize="11" letterSpacing="6" fill="currentColor">N</text>
+        <text x="280" y="165" textAnchor="middle" className="font-mono" fontSize="11" letterSpacing="6" fill="currentColor">E</text>
+        <text x="160" y="290" textAnchor="middle" className="font-mono" fontSize="11" letterSpacing="6" fill="currentColor">S</text>
+        <text x="40" y="165" textAnchor="middle" className="font-mono" fontSize="11" letterSpacing="6" fill="currentColor">W</text>
       </svg>
     </div>
   );

@@ -1,316 +1,341 @@
-import { ArrowUpRight, AlertTriangle, Sparkles, Plane } from "lucide-react";
-import { sql } from "drizzle-orm";
+import Link from "next/link";
+import { eq, and, desc, sql, gte } from "drizzle-orm";
 import { db } from "@/db/client";
-import { airport, airline, aircraftType } from "@/db/schema";
+import {
+  game,
+  aircraft,
+  aircraftType,
+  airport,
+  route,
+  newsEvent,
+  txn,
+} from "@/db/schema";
+import { getSessionUser } from "@/lib/session";
+import { redirect } from "next/navigation";
+import { ArrowUpRight } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
 import {
   BoardingCard,
   BoardingCardEyebrow,
   StatBlock,
 } from "@/components/shell/boarding-card";
+import { formatUsdCents } from "@/lib/money";
+import { formatGameDate } from "@/sim/time";
 import { cn } from "@/lib/utils";
+import { alias } from "drizzle-orm/sqlite-core";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  const [{ n: airportCount }] = await db.select({ n: sql<number>`count(*)` }).from(airport);
-  const [{ n: airlineCount }] = await db.select({ n: sql<number>`count(*)` }).from(airline);
-  const [{ n: typeCount }] = await db.select({ n: sql<number>`count(*)` }).from(aircraftType);
+  const session = await getSessionUser();
+  if (!session) redirect("/");
+  const g = await db.query.game.findFirst({ where: eq(game.userId, session.user.id) });
+  if (!g) redirect("/onboarding");
+
+  const today = g.currentDay;
+  const ledgerWindow = 7;
+
+  const [{ fleetN }] = await db
+    .select({ fleetN: sql<number>`count(*)` })
+    .from(aircraft)
+    .where(eq(aircraft.gameId, g.id));
+  const [{ activeRouteN }] = await db
+    .select({ activeRouteN: sql<number>`count(*)` })
+    .from(route)
+    .where(and(eq(route.gameId, g.id), eq(route.status, "active")));
+
+  // 7-day ledger
+  const ledger = await db
+    .select({
+      kind: txn.kind,
+      total: sql<number>`coalesce(sum(${txn.amountCents}), 0)`,
+    })
+    .from(txn)
+    .where(and(eq(txn.gameId, g.id), gte(txn.gameDay, today - ledgerWindow + 1)))
+    .groupBy(txn.kind);
+
+  const sumWhere = (kinds: string[]) =>
+    ledger.filter((l) => kinds.includes(l.kind)).reduce((s, l) => s + Number(l.total), 0);
+  const revenue = sumWhere(["route_revenue"]);
+  const operatingCost = -sumWhere(["route_fuel", "route_crew", "route_landing", "aircraft_idle"]);
+  const netIncome = revenue - operatingCost;
+
+  // Daily net for the last 12 game-days (sparkline)
+  const dailyNets = await db
+    .select({
+      day: txn.gameDay,
+      net: sql<number>`sum(${txn.amountCents})`,
+    })
+    .from(txn)
+    .where(
+      and(
+        eq(txn.gameId, g.id),
+        gte(txn.gameDay, today - 11),
+        sql`${txn.kind} != 'aircraft_purchase' AND ${txn.kind} != 'starter_grant'`,
+      ),
+    )
+    .groupBy(txn.gameDay)
+    .orderBy(txn.gameDay);
+  const bars = padDays(dailyNets, today, 12);
+
+  // Fleet snapshot
+  const fleetRows = await db
+    .select({
+      id: aircraft.id,
+      tail: aircraft.tail,
+      base: airport.iata,
+      baseCity: airport.city,
+      typeName: aircraftType.model,
+    })
+    .from(aircraft)
+    .innerJoin(airport, eq(aircraft.baseAirportId, airport.id))
+    .innerJoin(aircraftType, eq(aircraft.typeId, aircraftType.id))
+    .where(eq(aircraft.gameId, g.id))
+    .limit(4);
+
+  // Latest news
+  const news = await db
+    .select()
+    .from(newsEvent)
+    .where(eq(newsEvent.gameId, g.id))
+    .orderBy(desc(newsEvent.gameDay), desc(newsEvent.createdAt))
+    .limit(4);
+
+  const dateLabel = formatGameDate(today);
 
   return (
     <div className="flex flex-col gap-10">
       <PageHeader
         code="OPS · 01"
         meta="Operations Centre"
-        title="Good morning, Captain."
-        description="The board is yours. Open routes, watch the cash, and push the network out one city at a time."
+        title={`Good morning, Captain.`}
+        description={`${g.airlineName} · ${dateLabel.date}, ${dateLabel.year}.`}
         actions={
-          <button className="group flex items-center gap-2 border border-ink bg-ink px-4 py-2.5 text-[12px] uppercase tracking-[0.2em] text-paper transition-all hover:bg-persimmon hover:border-persimmon">
+          <Link
+            href="/routes"
+            className="group flex items-center gap-2 border border-ink bg-ink px-4 py-2.5 text-[12px] uppercase tracking-[0.2em] text-paper transition-all hover:bg-persimmon hover:border-persimmon"
+          >
             File a flight plan
             <ArrowUpRight className="size-3.5 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
-          </button>
+          </Link>
         }
       />
 
-      {/* Industry overview */}
-      <section className="border border-ink/15 bg-paper-deep">
-        <div className="grid grid-cols-2 divide-x divide-ink/10 md:grid-cols-4">
-          <RefStat code="NET" label="Airports in the network" value={airportCount} />
-          <RefStat code="OPR" label="Carriers in the market" value={airlineCount} />
-          <RefStat code="EQP" label="Aircraft on the order book" value={typeCount} />
-          <div className="flex items-center justify-between gap-3 px-5 py-3.5">
-            <div className="flex flex-col">
-              <span className="label-eyebrow">Industry</span>
-              <span className="text-[15px] leading-tight">Markets open</span>
-            </div>
-            <span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-hangar">
-              <span className="size-1.5 rounded-full bg-hangar pulse-beacon" />
-              Live
-            </span>
-          </div>
-        </div>
-      </section>
-
-      {/* Today on the board — boarding-pass cards */}
       <section className="grid gap-4 md:grid-cols-3">
         <BoardingCard>
-          <BoardingCardEyebrow code="A" title="Today on the board" meta="MON · 12 JAN" />
+          <BoardingCardEyebrow code="A" title="Today on the board" meta={dateLabel.date.toUpperCase()} />
           <div className="grid grid-cols-2">
             <StatBlock
               label="Cash on hand"
-              value="$2.40M"
-              hint="Runway · 86 game-days"
-              tone="positive"
+              value={formatUsdCents(g.cashCents)}
+              hint={runwayHint(g.cashCents, dailyNets)}
+              tone={g.cashCents < 0 ? "negative" : "positive"}
             />
             <StatBlock
-              label="Net 24h"
-              value="+$12K"
-              hint="vs. yday +$9K"
-              tone="positive"
+              label="Net last 24h"
+              value={formatUsdCents(bars.at(-1)?.net ?? 0, { sign: "always" })}
+              hint={`vs. ${formatUsdCents(bars.at(-2)?.net ?? 0, { sign: "always" })} prior day`}
+              tone={(bars.at(-1)?.net ?? 0) >= 0 ? "positive" : "negative"}
               className="border-l border-ink/10"
             />
             <StatBlock
               label="Fuel index"
-              value="$3.18"
-              hint="USD / gal · +0.4%"
+              value={`$${(g.fuelPriceCentsPerLiter / 100).toFixed(2)}`}
+              hint="USD / litre"
               className="border-t border-ink/10"
             />
             <StatBlock
               label="Reputation"
-              value="32"
-              hint="of 100 · regional carrier"
+              value={g.reputation.toString()}
+              hint={reputationLabel(g.reputation)}
               className="border-t border-l border-ink/10"
             />
           </div>
         </BoardingCard>
 
         <BoardingCard>
-          <BoardingCardEyebrow code="B" title="Fleet status" meta="01 TAIL" />
-          <div className="flex flex-col gap-4 px-4 py-5">
-            <FleetRow
-              tail="N101AT"
-              type="Embraer E170"
-              base="Boston · BOS"
-              utilisation={62}
-              status="In service"
-              tone="positive"
-            />
-            <div className="rule-soft" />
-            <button className="group flex items-center justify-between border border-dashed border-ink/30 px-4 py-3 text-left text-[13px] text-ink-soft hover:border-ink hover:text-ink">
-              <span className="flex items-center gap-3">
-                <Plane className="size-4" strokeWidth={1.6} />
-                Acquire a second aircraft
-              </span>
+          <BoardingCardEyebrow code="B" title="Fleet status" meta={`${Number(fleetN)} TAIL${Number(fleetN) === 1 ? "" : "S"}`} />
+          <div className="flex flex-col gap-3 px-4 py-5">
+            {fleetRows.length === 0 ? (
+              <p className="text-[13px] text-ink-soft">No aircraft yet.</p>
+            ) : (
+              fleetRows.map((a) => (
+                <div key={a.id} className="flex items-center justify-between text-[13px]">
+                  <div className="flex items-center gap-3">
+                    <span className="size-2 rounded-full bg-hangar pulse-beacon" />
+                    <div>
+                      <div className="font-mono text-[12px] tracking-[0.08em]">{a.tail}</div>
+                      <div className="text-[11px] text-ink-faint">
+                        {a.typeName} · {a.base} · {a.baseCity}
+                      </div>
+                    </div>
+                  </div>
+                  <span className="label-code text-ink-faint">In service</span>
+                </div>
+              ))
+            )}
+            <Link
+              href="/fleet"
+              className="group mt-1 flex items-center justify-between border border-dashed border-ink/30 px-3 py-2.5 text-[12px] text-ink-soft hover:border-ink hover:text-ink"
+            >
+              <span>{Number(fleetN) === 0 ? "Acquire your first aircraft" : "Manage fleet"}</span>
               <ArrowUpRight className="size-3.5 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
-            </button>
+            </Link>
           </div>
         </BoardingCard>
 
         <BoardingCard>
-          <BoardingCardEyebrow code="C" title="Awaiting your call" meta="02 OPEN" />
-          <div className="flex flex-col">
-            <DecisionRow
-              kind="warn"
-              icon={<AlertTriangle className="size-4" strokeWidth={1.7} />}
-              title="Fuel hedge expiring"
-              detail="Renew at $3.21/gal · 4 quarters"
-            />
-            <DecisionRow
-              kind="info"
-              icon={<Sparkles className="size-4" strokeWidth={1.7} />}
-              title="Tech: Regional Ops II"
-              detail="2 points available · unlocks ATR-72"
-            />
+          <BoardingCardEyebrow code="C" title="Network" meta={`${Number(activeRouteN)} OPEN`} />
+          <div className="flex flex-col gap-2 px-4 py-5">
+            {Number(activeRouteN) === 0 ? (
+              <p className="text-[13px] text-ink-soft">
+                You're certified — now open a city pair to start carrying passengers.
+              </p>
+            ) : (
+              <p className="text-[13px] text-ink-soft">
+                {Number(activeRouteN)} active route{Number(activeRouteN) === 1 ? "" : "s"} on the schedule.
+              </p>
+            )}
+            <Link
+              href="/routes"
+              className="group mt-2 flex items-center justify-between border border-dashed border-ink/30 px-3 py-2.5 text-[12px] text-ink-soft hover:border-ink hover:text-ink"
+            >
+              <span>{Number(activeRouteN) === 0 ? "Open a route" : "Manage routes"}</span>
+              <ArrowUpRight className="size-3.5 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+            </Link>
           </div>
         </BoardingCard>
       </section>
 
-      {/* Two-up: ledger summary + newsroom strip */}
+      {/* Two-up: ledger + news */}
       <section className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
         <BoardingCard>
-          <BoardingCardEyebrow
-            code="D"
-            title="Ledger · last 7 game-days"
-            meta="USD"
-          />
+          <BoardingCardEyebrow code="D" title={`Ledger · last ${ledgerWindow} game-days`} meta="USD" />
           <div className="grid grid-cols-3 divide-x divide-ink/10">
-            {LEDGER_ROWS.map((row) => (
-              <div key={row.label} className="flex flex-col gap-1.5 px-4 py-5">
-                <span className="label-eyebrow">{row.label}</span>
-                <span
-                  className={cn(
-                    "num-tabular text-[22px] font-medium leading-none",
-                    row.delta && row.delta.startsWith("+") && "text-hangar",
-                    row.delta && row.delta.startsWith("-") && "text-beacon",
-                  )}
-                >
-                  {row.value}
-                </span>
-                {row.delta && (
-                  <span className="num-tabular text-[11px] text-ink-faint">
-                    {row.delta} vs. prior week
-                  </span>
-                )}
-              </div>
-            ))}
+            <LedgerCol label="Revenue" value={formatUsdCents(revenue)} tone="positive" />
+            <LedgerCol label="Operating cost" value={formatUsdCents(operatingCost)} tone="warning" />
+            <LedgerCol label="Net income" value={formatUsdCents(netIncome, { sign: "always" })} tone={netIncome >= 0 ? "positive" : "negative"} />
           </div>
-
-          {/* Sparkline-ish bar set */}
           <div className="border-t border-ink/10 px-4 py-5">
-            <div className="flex items-end gap-1.5 h-24">
-              {BARS.map((v, i) => (
-                <div
-                  key={i}
-                  className={cn(
-                    "flex-1 rounded-t-sm bg-ink/15",
-                    i === BARS.length - 1 && "bg-persimmon",
-                  )}
-                  style={{ height: `${v}%` }}
-                />
-              ))}
-            </div>
+            <Sparkline bars={bars} />
             <div className="mt-2 flex justify-between font-mono text-[10px] uppercase tracking-[0.2em] text-ink-faint">
-              <span>D-7</span>
+              <span>{ledgerWindow}d ago</span>
               <span>Today</span>
             </div>
           </div>
         </BoardingCard>
 
         <BoardingCard>
-          <BoardingCardEyebrow code="E" title="Newsroom · while you were away" meta="03" />
-          <ol className="divide-y divide-ink/10">
-            {NEWS.map((n, i) => (
-              <li key={i} className="flex flex-col gap-1.5 px-4 py-4">
-                <div className="flex items-center gap-3">
-                  <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-persimmon">
-                    {n.tag}
-                  </span>
-                  <span className="label-code text-ink-faint">{n.when}</span>
-                </div>
-                <p className="text-[14px] leading-snug text-ink">{n.headline}</p>
-                <p className="text-[12px] text-ink-soft">{n.detail}</p>
-              </li>
-            ))}
-          </ol>
+          <BoardingCardEyebrow code="E" title="Newsroom" meta={`${news.length}`} />
+          {news.length === 0 ? (
+            <div className="px-4 py-6 text-[13px] text-ink-soft">
+              No news yet. The press starts running once you're flying.
+            </div>
+          ) : (
+            <ol className="divide-y divide-ink/10">
+              {news.map((n) => (
+                <li key={n.id} className="flex flex-col gap-1.5 px-4 py-3.5">
+                  <div className="flex items-center gap-3">
+                    <span
+                      className={cn(
+                        "font-mono text-[10px] uppercase tracking-[0.2em]",
+                        n.severity === "good"
+                          ? "text-hangar"
+                          : n.severity === "warn"
+                            ? "text-runway"
+                            : n.severity === "bad"
+                              ? "text-beacon"
+                              : "text-persimmon",
+                      )}
+                    >
+                      {n.category}
+                    </span>
+                    <span className="label-code text-ink-faint">DAY {n.gameDay}</span>
+                  </div>
+                  <p className="text-[14px] leading-snug text-ink">{n.headline}</p>
+                  {n.body && <p className="text-[12px] text-ink-soft">{n.body}</p>}
+                </li>
+              ))}
+            </ol>
+          )}
+          <Link
+            href="/news"
+            className="group flex items-center justify-between border-t border-ink/15 bg-paper-deep px-4 py-2.5 text-[11.5px] uppercase tracking-[0.2em] text-ink-soft hover:bg-paper hover:text-ink"
+          >
+            Read the newsroom
+            <ArrowUpRight className="size-3.5 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+          </Link>
         </BoardingCard>
       </section>
     </div>
   );
 }
 
-const LEDGER_ROWS = [
-  { label: "Revenue", value: "$148K", delta: "+8%" },
-  { label: "Operating cost", value: "$132K", delta: "+3%" },
-  { label: "Net income", value: "$16K", delta: "+62%" },
-];
+// ---------- helpers ----------
 
-const BARS = [22, 38, 30, 44, 28, 52, 64, 70, 58, 78, 88, 96];
-
-const NEWS = [
-  {
-    tag: "MARKET",
-    when: "08:14 · D-1",
-    headline: "Jet-fuel index ticked up 0.4% as Brent crude held above $84",
-    detail: "Hedged carriers extended their unit-cost lead.",
-  },
-  {
-    tag: "FLEET",
-    when: "06:02 · D-1",
-    headline: "Embraer announced 14-month delivery slots on the E175 line",
-    detail: "Order books open Friday — small carriers prioritised.",
-  },
-  {
-    tag: "ROUTES",
-    when: "21:30 · D-2",
-    headline: "JetBlue dropped Boston ↔ Burlington from the winter schedule",
-    detail: "Slot pair becomes available at BOS for Q2.",
-  },
-];
-
-function RefStat({ code, label, value }: { code: string; label: string; value: number }) {
-  return (
-    <div className="flex items-center gap-4 px-5 py-3.5">
-      <span className="font-mono text-[10.5px] uppercase tracking-[0.28em] text-persimmon">
-        {code}
-      </span>
-      <div className="flex flex-col">
-        <span className="label-eyebrow">{label}</span>
-        <span className="num-tabular text-[18px] leading-tight">
-          {value.toLocaleString()}
-        </span>
-      </div>
-    </div>
-  );
+function padDays(rows: { day: number; net: number }[], today: number, n: number) {
+  const map = new Map(rows.map((r) => [r.day, Number(r.net)]));
+  const out: { day: number; net: number }[] = [];
+  for (let d = today - n + 1; d <= today; d++) {
+    out.push({ day: d, net: map.get(d) ?? 0 });
+  }
+  return out;
 }
 
-function FleetRow({
-  tail,
-  type,
-  base,
-  utilisation,
-  status,
+function LedgerCol({
+  label,
+  value,
   tone,
 }: {
-  tail: string;
-  type: string;
-  base: string;
-  utilisation: number;
-  status: string;
-  tone: "positive" | "warning" | "negative" | "neutral";
+  label: string;
+  value: string;
+  tone: "positive" | "negative" | "warning";
 }) {
-  const dot = {
-    positive: "bg-hangar",
-    warning: "bg-runway",
-    negative: "bg-beacon",
-    neutral: "bg-ink-faint",
-  }[tone];
+  const cls = tone === "positive" ? "text-hangar" : tone === "negative" ? "text-beacon" : "text-ink";
   return (
-    <div className="flex items-center justify-between gap-4">
-      <div className="flex items-center gap-3">
-        <span className={cn("size-2 rounded-full", dot, "pulse-beacon")} />
-        <div className="flex flex-col">
-          <span className="font-mono text-[12px] tracking-[0.08em]">{tail}</span>
-          <span className="text-[11px] text-ink-faint">
-            {type} · {base}
-          </span>
-        </div>
-      </div>
-      <div className="flex flex-col items-end">
-        <span className="num-tabular text-[14px]">{utilisation}%</span>
-        <span className="label-code text-ink-faint">{status}</span>
-      </div>
+    <div className="flex flex-col gap-1.5 px-4 py-5">
+      <span className="label-eyebrow">{label}</span>
+      <span className={cn("num-tabular text-[22px] font-medium leading-none", cls)}>{value}</span>
     </div>
   );
 }
 
-function DecisionRow({
-  kind,
-  icon,
-  title,
-  detail,
-}: {
-  kind: "warn" | "info";
-  icon: React.ReactNode;
-  title: string;
-  detail: string;
-}) {
+function Sparkline({ bars }: { bars: { day: number; net: number }[] }) {
+  const max = Math.max(1, ...bars.map((b) => Math.abs(b.net)));
   return (
-    <button className="group flex items-start gap-3 border-b border-ink/10 px-4 py-3.5 text-left last:border-b-0 hover:bg-paper-deep">
-      <span
-        className={cn(
-          "mt-0.5 inline-flex size-6 items-center justify-center rounded-sm",
-          kind === "warn"
-            ? "bg-runway/25 text-ink"
-            : "bg-persimmon/15 text-persimmon",
-        )}
-      >
-        {icon}
-      </span>
-      <span className="flex-1">
-        <span className="block text-[13px] font-medium text-ink">{title}</span>
-        <span className="block text-[11.5px] text-ink-soft">{detail}</span>
-      </span>
-      <ArrowUpRight className="mt-1 size-3.5 text-ink-faint transition-all group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-ink" />
-    </button>
+    <div className="flex h-24 items-end gap-1.5">
+      {bars.map((b, i) => {
+        const h = Math.min(100, (Math.abs(b.net) / max) * 100);
+        const positive = b.net >= 0;
+        return (
+          <div
+            key={i}
+            className={cn(
+              "flex-1 rounded-t-sm",
+              i === bars.length - 1 ? "bg-persimmon" : positive ? "bg-ink/35" : "bg-beacon/40",
+            )}
+            style={{ height: `${Math.max(4, h)}%` }}
+            title={`Day ${b.day}: ${formatUsdCents(b.net, { sign: "always" })}`}
+          />
+        );
+      })}
+    </div>
   );
+}
+
+function reputationLabel(r: number) {
+  if (r >= 80) return "of 100 · global brand";
+  if (r >= 60) return "of 100 · trusted name";
+  if (r >= 40) return "of 100 · known carrier";
+  if (r >= 20) return "of 100 · regional carrier";
+  return "of 100 · new entrant";
+}
+
+function runwayHint(cashCents: number, daily: { day: number; net: number }[]): string {
+  if (daily.length === 0) return "Cash position";
+  const recent = daily.slice(-7);
+  const avgDailyNet = recent.reduce((s, d) => s + d.net, 0) / recent.length;
+  if (avgDailyNet >= 0) return "Burn-positive";
+  const days = Math.floor(cashCents / -avgDailyNet);
+  return `Runway · ${days} game-days`;
 }

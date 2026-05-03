@@ -298,6 +298,25 @@ Phase 1 checklist:
 
 **Phase 2 — Core sim:** Player can buy 1 aircraft, open 1 route, see profit tick. Time model + offline catch-up + newspaper summary.
 
+Phase 2 checklist:
+- [x] Game-state schema: `game`, `aircraft`, `route`, `txn` (ledger), `news_event`. Migration `0002_perfect_living_mummy.sql` applied
+- [x] Time helpers (`src/sim/time.ts`): real ↔ game time at the §3 rate matrix; whole-day boundaries carry over fractional remainders
+- [x] Seedable PRNG (`src/sim/rng.ts`) — Mulberry32; per-day stream derived from `(gameSeed, gameDay)` for replay determinism
+- [x] Demand model (`src/sim/demand.ts`) — size × hub-bonus × distance bell × fare elasticity × seasonality × reputation
+- [x] Per-day tick (`src/sim/tick.ts`) — pax / revenue / fuel / crew / landing / idle, with stochastic ±12% demand noise + fuel-price walk
+- [x] Catch-up runner (`src/sim/catchup.ts`) — N days in one sync transaction, aggregates per-route summaries + market cards rather than 84 daily rows
+- [x] `ensureSimUpToDate(gameId)` server helper invoked from `getActiveGame()` and every player-action endpoint
+- [x] Onboarding at `/onboarding` — airline name + call-sign + home-airport typeahead, `createGame` server action grants $5M + starter ATR 42-600
+- [x] Server actions: `buyAircraft`, `openRoute`, `closeRoute`, `setRateMultiplier`, `markAllNewsSeen`
+- [x] Real Fleet page — fleet table + acquire dialog (catalogue filterable by class, live cash-impact preview, blocks if insufficient)
+- [x] Real Routes page — active + closed tables + open-route wizard with live demand/load/range projection (typeahead via `/api/airports/search`)
+- [x] Topbar KPIs live — `CASH / FLEET / ROUTES / PAX/DAY / OTP / REP`; wallclock row shows real game date, real wallclock + tz, current rate (1× / 2× / 4× / 8× selector live)
+- [x] Dashboard — real cash · ledger (revenue / op-cost / net) · 12-day sparkline · live news strip · runway hint based on daily burn
+- [x] Newsroom — feed grouped into `since-last-visit` / `past 7 days` / `earlier`
+- [x] Globe — player route arcs overlaid as great-circle splines, tone-bucketed (hangar = profitable · persimmon = loss-making · ink = neutral)
+- [x] End-to-end verified: smoke script founds airline → opens LHR↔CDG → advances 30 game-days in 116ms → produces correct cash/load/news. Docker image rebuilds, seeds, boots and serves; auth-gated routes return 307 unauth, public ones 200
+- [x] Mark Phase 2 done; ready for Phase 3 (depth: finance instruments, real reputation system, competitor AI)
+
 **Phase 3 — Depth:** Finance instruments (loans, leases), reputation, staffing, demand model with competition.
 
 **Phase 4 — Content:** Tech tree, random events, real-airline AI, codeshares, alliances.

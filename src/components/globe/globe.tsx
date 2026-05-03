@@ -5,10 +5,17 @@ import { OrbitControls } from "@react-three/drei";
 import { Suspense, useMemo } from "react";
 import { Earth } from "./earth";
 import { AirportsLayer, type GlobeAirport } from "./airports-layer";
+import { RoutesLayer, type GlobeRoute } from "./routes-layer";
 
-export function Globe({ airports }: { airports: GlobeAirport[] }) {
-  // Defensive copy so React/R3F doesn't try to mutate the server payload.
+export function Globe({
+  airports,
+  routes = [],
+}: {
+  airports: GlobeAirport[];
+  routes?: GlobeRoute[];
+}) {
   const data = useMemo<GlobeAirport[]>(() => airports, [airports]);
+  const routeData = useMemo<GlobeRoute[]>(() => routes, [routes]);
 
   return (
     <Canvas
@@ -17,7 +24,6 @@ export function Globe({ airports }: { airports: GlobeAirport[] }) {
       gl={{ antialias: true, alpha: true }}
       style={{ background: "transparent" }}
     >
-      {/* Light: warm key + cool fill, matching the paper-cream globe */}
       <ambientLight intensity={0.8} />
       <directionalLight position={[3, 2, 4]} intensity={1.0} />
       <directionalLight position={[-2, -1, -2]} intensity={0.25} color="#A9B7C6" />
@@ -25,6 +31,7 @@ export function Globe({ airports }: { airports: GlobeAirport[] }) {
       <Suspense fallback={null}>
         <Earth />
         <AirportsLayer airports={data} />
+        {routeData.length > 0 && <RoutesLayer routes={routeData} />}
       </Suspense>
 
       <OrbitControls

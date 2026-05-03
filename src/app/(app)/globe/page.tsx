@@ -1,16 +1,24 @@
 import { db } from "@/db/client";
-import { airport, airline } from "@/db/schema";
-import { desc, sql } from "drizzle-orm";
+import { airport, airline, route, game } from "@/db/schema";
+import { and, desc, eq, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/sqlite-core";
 import { Globe } from "@/components/globe/globe";
 import { PageHeader } from "@/components/shell/page-header";
 import {
   BoardingCard,
   BoardingCardEyebrow,
 } from "@/components/shell/boarding-card";
+import { getSessionUser } from "@/lib/session";
+import type { GlobeRoute } from "@/components/globe/routes-layer";
 
 export const dynamic = "force-dynamic";
 
 export default async function GlobePage() {
+  const session = await getSessionUser();
+  const playerGame = session
+    ? await db.query.game.findFirst({ where: eq(game.userId, session.user.id) })
+    : null;
+
   const airports = await db
     .select({
       id: airport.id,
@@ -24,6 +32,40 @@ export default async function GlobePage() {
       slot_constrained: airport.slotConstrained,
     })
     .from(airport);
+
+  // Player's active routes as great-circle arcs on the globe
+  let playerRoutes: GlobeRoute[] = [];
+  if (playerGame) {
+    const fromA = alias(airport, "from_a");
+    const toA = alias(airport, "to_a");
+    const rows = await db
+      .select({
+        id: route.id,
+        fromLat: fromA.lat,
+        fromLon: fromA.lon,
+        toLat: toA.lat,
+        toLon: toA.lon,
+        revenue: route.lastDailyRevenueCents,
+        cost: route.lastDailyCostCents,
+      })
+      .from(route)
+      .innerJoin(fromA, eq(route.fromAirportId, fromA.id))
+      .innerJoin(toA, eq(route.toAirportId, toA.id))
+      .where(and(eq(route.gameId, playerGame.id), eq(route.status, "active")));
+    playerRoutes = rows.map((r) => {
+      const net = r.revenue - r.cost;
+      const tone: GlobeRoute["tone"] =
+        net > 0 ? "good" : net < 0 ? "warn" : "neutral";
+      return {
+        id: r.id,
+        fromLat: r.fromLat,
+        fromLon: r.fromLon,
+        toLat: r.toLat,
+        toLon: r.toLon,
+        tone,
+      };
+    });
+  }
 
   const slotHubs = airports
     .filter((a) => a.slot_constrained)
@@ -71,7 +113,7 @@ export default async function GlobePage() {
           />
           <div className="relative h-[640px] bg-paper-deep">
             <div className="halftone pointer-events-none absolute inset-0 opacity-[0.05]" />
-            <Globe airports={airports} />
+            <Globe airports={airports} routes={playerRoutes} />
 
             <div className="pointer-events-none absolute bottom-4 left-4 flex gap-4 bg-paper/90 px-3 py-2 backdrop-blur">
               <LegendDot color="#D8451B" label="Slot-constrained hub" />
